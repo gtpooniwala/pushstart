@@ -10,7 +10,7 @@ export default function Home() {
   const [isResizing, setIsResizing] = useState(false);
   
   // Agent State
-  const [proposedAction, setProposedAction] = useState<any>(null);
+  const [proposedActions, setProposedActions] = useState<any[]>([]);
   const [threadId, setThreadId] = useState<string | null>(null);
 
   // Set initial width based on screen size
@@ -70,7 +70,7 @@ export default function Home() {
         <ChatPanel 
           threadId={threadId} 
           setThreadId={setThreadId}
-          setProposedAction={setProposedAction}
+          setProposedActions={setProposedActions}
         />
       </div>
 
@@ -86,8 +86,8 @@ export default function Home() {
         className="flex-shrink-0 bg-gray-50 dark:bg-gray-950 border-l border-gray-200 dark:border-gray-800"
       >
         <RightPanel 
-          proposedAction={proposedAction} 
-          onActionHandled={() => setProposedAction(null)}
+          proposedActions={proposedActions} 
+          onActionHandled={() => setProposedActions([])}
           threadId={threadId}
         />
       </div>

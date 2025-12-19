@@ -132,6 +132,9 @@ class TaskService:
             due_string=due_string,
             priority=priority
         )
+        if not isinstance(new_task_data, dict):
+            raise Exception(f"Failed to create task: {new_task_data}")
+            
         # 2. Update local DB
         return await self.update_local_task(new_task_data)
 
@@ -145,6 +148,9 @@ class TaskService:
             due_string=due_string,
             priority=priority
         )
+        if not isinstance(updated_task_data, dict):
+            raise Exception(f"Failed to update task: {updated_task_data}")
+
         # 2. Update local DB
         return await self.update_local_task(updated_task_data)
 
@@ -158,7 +164,12 @@ class TaskService:
     async def close_task(self, task_id: str):
         """Close in Todoist -> Delete from Local Cache (since it's completed)"""
         # 1. Close in Todoist
-        await todoist_client.close_task(task_id)
+        result = await todoist_client.close_task(task_id)
+        
+        # Check for error
+        if isinstance(result, str) and result.startswith("Error:"):
+             raise Exception(f"Failed to close task in Todoist: {result}")
+             
         # 2. Delete from local DB
         await self.delete_local_task(task_id)
 

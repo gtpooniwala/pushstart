@@ -1,30 +1,19 @@
 import os
 import sys
 import json
-from mcp import ClientSession, StdioServerParameters
-from mcp.client.stdio import stdio_client
+from mcp import ClientSession
+from mcp.client.sse import sse_client
 
-# Path to the server script
-# Assuming we are running from backend/
-SERVER_SCRIPT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../mcp/todoist_server/server.py"))
+# URL of the MCP server
+MCP_SERVER_URL = os.getenv("MCP_SERVER_URL", "http://localhost:8001/sse")
 
 class TodoistClient:
     async def _run_tool(self, tool_name, arguments=None):
         if arguments is None:
             arguments = {}
             
-        # Force COLUMNS to prevent rich/logging from wrapping to 1 char width in subprocess
-        env = os.environ.copy()
-        env["COLUMNS"] = "120"
-
-        server_params = StdioServerParameters(
-            command=sys.executable,
-            args=[SERVER_SCRIPT],
-            env=env
-        )
-        
         try:
-            async with stdio_client(server_params) as (read, write):
+            async with sse_client(MCP_SERVER_URL) as (read, write):
                 async with ClientSession(read, write) as session:
                     await session.initialize()
                     result = await session.call_tool(tool_name, arguments)
@@ -81,7 +70,7 @@ class TodoistClient:
         return await self._run_tool("delete_task", {"task_id": task_id})
 
     async def close_task(self, task_id):
-        return await self._run_tool("close_task", {"task_id": task_id})
+        return await self._run_tool("complete_task", {"task_id": task_id})
 
 # Singleton instance
 todoist_client = TodoistClient()

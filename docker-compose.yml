@@ -3,15 +3,56 @@ version: '3.8'
 services:
   db:
     image: postgres:15-alpine
-    restart: always
+    container_name: pushstart-db
     environment:
-      - POSTGRES_USER=pushstart
-      - POSTGRES_PASSWORD=pushstart_password
-      - POSTGRES_DB=pushstart_db
+      POSTGRES_USER: pushstart
+      POSTGRES_PASSWORD: pushstart_password
+      POSTGRES_DB: pushstart_db
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pushstart -d pushstart_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  mcp:
+    build:
+      context: mcp
+      dockerfile: Dockerfile
+    container_name: pushstart-mcp
+    ports:
+      - "8001:8000"
+    env_file:
+      - .env
+    volumes:
+      - ./mcp:/app
+    environment:
+      - PYTHONPATH=/app
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: pushstart-backend
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      mcp:
+        condition: service_started
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://pushstart:pushstart_password@db:5432/pushstart_db
+      - PYTHONPATH=/app
+      - MCP_SERVER_URL=http://mcp:8000/sse
+    volumes:
+      # Mount code for hot reloading during development
+      - ./backend:/app/backend
 
 volumes:
   postgres_data:

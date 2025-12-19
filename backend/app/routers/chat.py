@@ -5,6 +5,7 @@ import uuid
 
 from langchain_core.messages import HumanMessage, ToolMessage, AIMessage
 from app.agent.graph import app_graph
+from app.agent.tools import SENSITIVE_TOOLS, SAFE_TOOLS
 from app.core.db import engine
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlalchemy.orm import sessionmaker
@@ -12,22 +13,30 @@ from app.services.task_service import TaskService
 
 router = APIRouter()
 
+# Create a map of tools for easy lookup
+TOOL_MAP = {t.name: t for t in SENSITIVE_TOOLS + SAFE_TOOLS}
+
 class ChatRequest(BaseModel):
     message: str
     thread_id: Optional[str] = None
 
 class ApproveRequest(BaseModel):
     thread_id: str
-    tool_call_id: str # To verify we are approving the right thing
+    approved_tool_call_ids: Optional[List[str]] = None
+    # Backward compatibility
+    tool_call_id: Optional[str] = None
 
 class RejectRequest(BaseModel):
     thread_id: str
-    tool_call_id: str
+    tool_call_id: Optional[str] = None
     reason: Optional[str] = "Rejected by user"
 
 class ChatResponse(BaseModel):
     thread_id: str
     messages: List[Dict[str, Any]]
+    proposed_actions: List[Dict[str, Any]] = []
+    # Backward compatibility (optional, can be removed if frontend is updated simultaneously, 
+    # but safer to keep it null or the first action)
     proposed_action: Optional[Dict[str, Any]] = None
     status: str # "ready", "waiting_for_approval"
 
@@ -56,30 +65,33 @@ def _format_messages(messages):
     return formatted
 
 async def _get_proposed_action_with_details(snapshot):
-    proposed_action = None
+    proposed_actions = []
     status = "ready"
     
     if snapshot.next and "sensitive_tools" in snapshot.next:
         last_message = snapshot.values["messages"][-1]
         if isinstance(last_message, AIMessage) and last_message.tool_calls:
-            proposed_action = last_message.tool_calls[0]
             status = "waiting_for_approval"
             
-            # Enrich with task details if available
-            args = proposed_action.get("args", {})
-            task_id = args.get("task_id")
-            if task_id:
-                try:
-                    async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-                    async with async_session() as session:
-                        service = TaskService(session)
-                        task = await service.get_task(task_id)
-                        if task:
-                            proposed_action["task_details"] = task.model_dump()
-                except Exception as e:
-                    print(f"Failed to fetch task details: {e}")
+            for tool_call in last_message.tool_calls:
+                # Create a copy to avoid modifying the original message in state
+                action = tool_call.copy()
+                # Enrich with task details if available
+                args = action.get("args", {})
+                task_id = args.get("task_id")
+                if task_id:
+                    try:
+                        async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+                        async with async_session() as session:
+                            service = TaskService(session)
+                            task = await service.get_task(task_id)
+                            if task:
+                                action["task_details"] = task.model_dump()
+                    except Exception as e:
+                        print(f"Failed to fetch task details: {e}")
+                proposed_actions.append(action)
                     
-    return proposed_action, status
+    return proposed_actions, status
 
 @router.post("/message", response_model=ChatResponse)
 async def chat_message(request: ChatRequest):
@@ -102,12 +114,13 @@ async def chat_message(request: ChatRequest):
     # Check if we are interrupted
     snapshot = app_graph.get_state(config)
     
-    proposed_action, status = await _get_proposed_action_with_details(snapshot)
+    proposed_actions, status = await _get_proposed_action_with_details(snapshot)
     
     return ChatResponse(
         thread_id=thread_id,
         messages=_format_messages(snapshot.values["messages"]),
-        proposed_action=proposed_action,
+        proposed_actions=proposed_actions,
+        proposed_action=proposed_actions[0] if proposed_actions else None,
         status=status
     )
 
@@ -119,18 +132,100 @@ async def approve_action(request: ApproveRequest):
     if not snapshot.next:
         raise HTTPException(status_code=400, detail="No pending action to approve")
         
-    # Resume execution (None input means continue)
+    last_message = snapshot.values["messages"][-1]
+    if not isinstance(last_message, AIMessage) or not last_message.tool_calls:
+         raise HTTPException(status_code=400, detail="No tool calls found in last message")
+
+    # Determine which tools to run
+    approved_ids = request.approved_tool_call_ids
+    if approved_ids is None and request.tool_call_id:
+        approved_ids = [request.tool_call_id]
+    
+    # If approved_ids is None here, it means "Approve All"
+    approve_all = approved_ids is None
+
+    tool_outputs = []
+    
+    for tool_call in last_message.tool_calls:
+        tc_id = tool_call["id"]
+        if approve_all or (approved_ids and tc_id in approved_ids):
+            # Execute tool
+            tool_name = tool_call["name"]
+            tool = TOOL_MAP.get(tool_name)
+            if tool:
+                try:
+                    # We need to await the tool execution
+                    result = await tool.ainvoke(tool_call["args"])
+                    
+                    # Serialize result to JSON for better frontend handling
+                    import json
+                    content_str = str(result)
+                    try:
+                        if hasattr(result, "model_dump"):
+                            content_str = json.dumps(result.model_dump(), default=str)
+                        elif isinstance(result, list):
+                            # Handle list of models or dicts
+                            serialized_list = []
+                            for item in result:
+                                if hasattr(item, "model_dump"):
+                                    serialized_list.append(item.model_dump())
+                                else:
+                                    serialized_list.append(item)
+                            content_str = json.dumps(serialized_list, default=str)
+                        elif isinstance(result, dict):
+                            content_str = json.dumps(result, default=str)
+                    except Exception as e:
+                        print(f"Serialization error: {e}")
+                        # Fallback to string representation
+                        pass
+
+                    tool_outputs.append(ToolMessage(
+                        tool_call_id=tc_id,
+                        content=content_str,
+                        name=tool_name
+                    ))
+                except Exception as e:
+                    tool_outputs.append(ToolMessage(
+                        tool_call_id=tc_id,
+                        content=f"Error executing tool: {str(e)}",
+                        name=tool_name,
+                        status="error"
+                    ))
+            else:
+                 tool_outputs.append(ToolMessage(
+                    tool_call_id=tc_id,
+                    content=f"Tool {tool_name} not found",
+                    name=tool_name,
+                    status="error"
+                ))
+        else:
+            # Rejected
+            tool_outputs.append(ToolMessage(
+                tool_call_id=tc_id,
+                content="Action cancelled by user.",
+                name=tool_call["name"]
+            ))
+
+    # Update state with ALL outputs
+    app_graph.update_state(
+        config, 
+        {"messages": tool_outputs}, 
+        as_node="sensitive_tools" 
+    )
+    
+    # Resume execution
     final_state = await app_graph.ainvoke(None, config=config)
     
     # Check if there are more actions or if we are done
     snapshot = app_graph.get_state(config)
     
-    proposed_action, status = await _get_proposed_action_with_details(snapshot)
+    proposed_actions, status = await _get_proposed_action_with_details(snapshot)
             
     return ChatResponse(
         thread_id=request.thread_id,
         messages=_format_messages(snapshot.values["messages"]),
-        proposed_action=proposed_action,
+        proposed_actions=proposed_actions,
+        proposed_action=proposed_actions[0] if proposed_actions else None,
         status=status
     )
 
@@ -142,42 +237,39 @@ async def reject_action(request: RejectRequest):
     if not snapshot.next:
         raise HTTPException(status_code=400, detail="No pending action to reject")
     
-    # To reject, we inject a ToolMessage with error/rejection content
-    # This simulates the tool running and failing/being cancelled
+    last_message = snapshot.values["messages"][-1]
+    if not isinstance(last_message, AIMessage) or not last_message.tool_calls:
+         raise HTTPException(status_code=400, detail="No tool calls found in last message")
+
+    # Reject ALL pending actions if specific ID is not provided or just reject everything for safety
+    # If the user wants to reject specific ones, they should use the approve endpoint with the ones they WANT.
+    # So reject endpoint is "Cancel All".
     
-    tool_call_id = request.tool_call_id
-    rejection_message = ToolMessage(
-        tool_call_id=tool_call_id,
-        content=f"Action cancelled by user. Reason: {request.reason}"
-    )
-    
-    # We update the state to include this message
-    # And then we resume. The graph will see the ToolMessage and go back to 'chatbot'
-    # The chatbot will see the rejection and respond.
-    
-    # Note: We need to be careful. If we are interrupted BEFORE 'tools', 
-    # the 'tools' node hasn't run.
-    # If we manually insert a ToolMessage, we are effectively bypassing the 'tools' node.
-    # But the graph expects to run 'tools' next.
-    # We can use update_state to adding the message as if the tool node produced it.
-    # And then we need to tell the graph to skip the 'tools' node execution for this step?
-    # Or we can just update the state with the ToolMessage and set 'as_node="tools"' 
-    # so the graph thinks the tools node just ran.
+    tool_outputs = []
+    for tool_call in last_message.tool_calls:
+        tool_outputs.append(ToolMessage(
+            tool_call_id=tool_call["id"],
+            content=f"Action cancelled by user. Reason: {request.reason}",
+            name=tool_call["name"]
+        ))
     
     app_graph.update_state(
         config, 
-        {"messages": [rejection_message]}, 
+        {"messages": tool_outputs}, 
         as_node="sensitive_tools" 
     )
     
-    # Now resume. Since we updated as "tools", the next node should be "chatbot" (based on edge tools->chatbot)
+    # Now resume.
     final_state = await app_graph.ainvoke(None, config=config)
     
     snapshot = app_graph.get_state(config)
     
+    proposed_actions, status = await _get_proposed_action_with_details(snapshot)
+
     return ChatResponse(
         thread_id=request.thread_id,
         messages=_format_messages(snapshot.values["messages"]),
-        proposed_action=None,
-        status="ready"
+        proposed_actions=proposed_actions,
+        proposed_action=proposed_actions[0] if proposed_actions else None,
+        status=status
     )

@@ -35,7 +35,11 @@ interface Task {
   raw_data?: any;
 }
 
-export default function TaskList() {
+interface TaskListProps {
+  refreshTrigger?: number;
+}
+
+export default function TaskList({ refreshTrigger = 0 }: TaskListProps) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [newTask, setNewTask] = useState("");
   const [loading, setLoading] = useState(true);
@@ -44,7 +48,7 @@ export default function TaskList() {
 
   useEffect(() => {
     fetchTasks();
-  }, []);
+  }, [refreshTrigger]);
 
   const fetchTasks = async () => {
     try {
@@ -293,7 +297,7 @@ export default function TaskList() {
                         );
                       })()}
                       
-                      {task.labels && task.labels.map(label => (
+                      {task.labels && task.labels.length > 0 && (
                         <div className="flex items-center gap-2">
                           {task.labels.map(label => (
                             <span key={label} className="flex items-center gap-1 px-2 py-0.5 bg-gray-100 dark:bg-gray-700 rounded-full text-[10px] font-medium text-gray-600 dark:text-gray-300">

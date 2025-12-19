@@ -10,7 +10,7 @@ interface Message {
 interface ChatPanelProps {
   threadId: string | null;
   setThreadId: (id: string) => void;
-  setProposedAction: (action: any) => void;
+  setProposedActions: (actions: any[]) => void;
 }
 
 function ToolOutput({ content }: { content: string }) {
@@ -27,7 +27,8 @@ function ToolOutput({ content }: { content: string }) {
     }
   } catch (e) {
     // Not JSON, just use a snippet
-    summary = content.slice(0, 50) + (content.length > 50 ? "..." : "");
+    // Increased limit to 200 chars to show more context
+    summary = content.slice(0, 200) + (content.length > 200 ? "..." : "");
   }
 
   return (
@@ -80,7 +81,7 @@ function ToolCallDisplay({ toolCalls }: { toolCalls: any[] }) {
   );
 }
 
-export default function ChatPanel({ threadId, setThreadId, setProposedAction }: ChatPanelProps) {
+export default function ChatPanel({ threadId, setThreadId, setProposedActions }: ChatPanelProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -123,7 +124,14 @@ export default function ChatPanel({ threadId, setThreadId, setProposedAction }: 
       }
 
       setMessages(data.messages);
-      setProposedAction(data.proposed_action);
+      // Handle both new list format and legacy single format
+      if (data.proposed_actions && data.proposed_actions.length > 0) {
+        setProposedActions(data.proposed_actions);
+      } else if (data.proposed_action) {
+        setProposedActions([data.proposed_action]);
+      } else {
+        setProposedActions([]);
+      }
       
     } catch (error) {
       console.error("Error sending message:", error);

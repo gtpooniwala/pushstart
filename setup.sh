@@ -11,7 +11,7 @@ echo "🐍 Setting up Python Environment..."
 # Try to find conda profile script
 if [ -f "$HOME/miniconda3/etc/profile.d/conda.sh" ]; then
     source "$HOME/miniconda3/etc/profile.d/conda.sh"
-elif [ -f "$HOME/anaconda3/etc/profile.d/conda.sh" ]; then
+    elif [ -f "$HOME/anaconda3/etc/profile.d/conda.sh" ]; then
     source "$HOME/anaconda3/etc/profile.d/conda.sh"
 else
     if command -v conda &> /dev/null; then
@@ -54,7 +54,7 @@ echo "🐳 Setting up Docker..."
 cd "$DIR"
 if command -v docker-compose &> /dev/null; then
     docker-compose pull
-elif command -v docker &> /dev/null && docker compose version &> /dev/null; then
+    elif command -v docker &> /dev/null && docker compose version &> /dev/null; then
     docker compose pull
 else
     echo "⚠️  Docker Compose not found. Please ensure Docker is installed."

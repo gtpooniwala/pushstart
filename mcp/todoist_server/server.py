@@ -82,7 +82,10 @@ def update_task(task_id: str, content: Optional[str] = None, description: Option
         if priority is not None: kwargs['priority'] = priority
         
         is_success = api.update_task(task_id=task_id, **kwargs)
-        return {"success": is_success, "id": task_id}
+        if is_success:
+            task = api.get_task(task_id=task_id)
+            return task.to_dict()
+        return {"success": False, "id": task_id}
     except Exception as e:
         return f"Error: {str(e)}"
 
@@ -96,13 +99,16 @@ def delete_task(task_id: str):
         return f"Error: {str(e)}"
 
 @mcp.tool()
-def close_task(task_id: str):
-    """Complete (close) a task."""
+def complete_task(task_id: str):
+    """Complete (close) a task. Also known as finish or mark as completed."""
     try:
-        is_success = api.complete_task(task_id=task_id)
+        is_success = api.close_task(task_id=task_id)
         return {"success": is_success, "id": task_id}
     except Exception as e:
         return f"Error: {str(e)}"
+
+# Expose the SSE ASGI app for Uvicorn
+app = mcp.sse_app()
 
 if __name__ == "__main__":
     mcp.run()

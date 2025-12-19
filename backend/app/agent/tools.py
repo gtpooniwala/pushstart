@@ -36,6 +36,15 @@ async def delete_task(task_id: str):
         return {"status": "success"}
 
 @tool
+async def complete_task(task_id: str):
+    """Complete a task in Todoist."""
+    async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    async with async_session() as session:
+        service = TaskService(session)
+        await service.close_task(task_id)
+        return {"status": "success"}
+
+@tool
 async def list_tasks():
     """List all active tasks from local cache."""
     async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
@@ -44,6 +53,6 @@ async def list_tasks():
         return await service.get_all_tasks()
 
 SAFE_TOOLS = [list_tasks]
-SENSITIVE_TOOLS = [create_task, update_task, delete_task]
+SENSITIVE_TOOLS = [create_task, update_task, delete_task, complete_task]
 ALL_TOOLS = SAFE_TOOLS + SENSITIVE_TOOLS
 

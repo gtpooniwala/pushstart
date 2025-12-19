@@ -13,11 +13,8 @@ cleanup() {
     if [ -n "$FRONTEND_PID" ]; then
         kill $FRONTEND_PID 2>/dev/null
     fi
-    if [ -n "$MCP_PID" ]; then
-        kill $MCP_PID 2>/dev/null
-    fi
     # Stop Docker containers
-    echo "🐳 Stopping Docker containers..."
+    echo "� Stopping Docker containers..."
     if command -v docker-compose &> /dev/null; then
         docker-compose down
         elif command -v docker &> /dev/null && docker compose version &> /dev/null; then
@@ -31,16 +28,13 @@ trap cleanup SIGINT
 
 echo "🚀 Starting Pushstart (Local Development)..."
 
-# 1. Start Docker Dependencies (Database only)
-echo "🐳 Starting Database (Docker)..."
+# 1. Start Docker Dependencies (Database & MCP)
+echo "� Starting Database & MCP Server (Docker)..."
 cd "$DIR"
 if command -v docker-compose &> /dev/null; then
-    # Ensure MCP container is stopped to free up port 8001
-    docker-compose stop mcp 2>/dev/null
-    docker-compose up -d db
+    docker-compose up -d db mcp
     elif command -v docker &> /dev/null && docker compose version &> /dev/null; then
-    docker compose stop mcp 2>/dev/null
-    docker compose up -d db
+    docker compose up -d db mcp
 else
     echo "❌ Docker Compose not found. Cannot start dependencies."
     exit 1
@@ -74,31 +68,7 @@ fi
 # Activate the environment
 conda activate pushstart || { echo "❌ Failed to activate conda environment 'pushstart'. Run ./setup.sh first."; exit 1; }
 
-# 3. Start MCP Server (Local)
-echo "🔌 Starting MCP Server (Local)..."
-cd "$DIR/mcp"
-# Install dependencies to ensure they are available in the conda env
-echo "   Installing MCP dependencies..."
-pip install -r todoist_server/requirements.txt > /dev/null 2>&1
-
-# Run uvicorn for MCP
-# We run on port 8001 to match what the backend expects
-export PYTHONPATH=$PYTHONPATH:$(pwd)
-python3 -m uvicorn todoist_server.server:app --port 8001 &
-MCP_PID=$!
-
-# Wait for MCP Server to be ready
-echo "   Waiting for MCP server to be ready..."
-for i in {1..30}; do
-    if nc -z localhost 8001 2>/dev/null; then
-        echo "   ✅ MCP Server is ready!"
-        break
-    fi
-    echo "   ...waiting for port 8001..."
-    sleep 1
-done
-
-# 4. Start Backend
+# 3. Start Backend
 echo "📦 Starting Backend (FastAPI)..."
 cd "$DIR/backend"
 # Check if uvicorn is available
@@ -108,15 +78,13 @@ if ! command -v uvicorn &> /dev/null; then
 fi
 
 # Run uvicorn
+# Note: MCP_SERVER_URL defaults to http://localhost:8001/sse which matches docker-compose port mapping
 # Force DATABASE_URL to localhost for local run
 export DATABASE_URL="postgresql+asyncpg://pushstart:pushstart_password@localhost:5432/pushstart_db"
-# Force MCP_SERVER_URL to localhost for local run
-export MCP_SERVER_URL="http://127.0.0.1:8001/sse"
-
 python3 -m uvicorn app.main:app --reload --port 8000 &
 BACKEND_PID=$!
 
-# 5. Start Frontend
+# 4. Start Frontend
 echo "🎨 Starting Frontend (Next.js)..."
 cd "$DIR/frontend"
 npm run dev &
