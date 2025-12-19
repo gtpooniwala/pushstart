@@ -10,12 +10,17 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.routers import tasks, chat
 from app.core.db import init_db
+from app.agent.graph import close_graph
 
 app = FastAPI(title="Pushstart Backend")
 
 @app.on_event("startup")
 async def on_startup():
     await init_db()
+
+@app.on_event("shutdown")
+async def on_shutdown():
+    await close_graph()
 
 # Configure CORS
 app.add_middleware(

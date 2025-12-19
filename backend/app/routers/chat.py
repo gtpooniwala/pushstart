@@ -4,7 +4,7 @@ from typing import List, Optional, Dict, Any
 import uuid
 
 from langchain_core.messages import HumanMessage, ToolMessage, AIMessage
-from app.agent.graph import app_graph
+from app.agent.graph import get_app_graph
 from app.agent.tools import SENSITIVE_TOOLS, SAFE_TOOLS
 from app.core.db import engine
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -93,10 +93,87 @@ async def _get_proposed_action_with_details(snapshot):
                     
     return proposed_actions, status
 
+from sqlalchemy import text
+
+@router.get("/history")
+async def get_chat_history():
+    try:
+        async with engine.connect() as conn:
+            # Check if table exists
+            result = await conn.execute(text(
+                "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'checkpoints')"
+            ))
+            exists = result.scalar()
+            
+            if not exists:
+                return {"threads": []}
+
+            # Get threads
+            # We could try to get the last write time to sort, but for now just list them
+            result = await conn.execute(text(
+                "SELECT thread_id FROM checkpoints GROUP BY thread_id"
+            ))
+            # Simple title generation
+            threads = [{"id": row.thread_id, "title": f"Chat {row.thread_id[:8]}..."} for row in result]
+            return {"threads": threads}
+    except Exception as e:
+        print(f"Error fetching history: {e}")
+        return {"threads": []}
+
+@router.get("/{thread_id}", response_model=ChatResponse)
+async def get_chat_state(thread_id: str):
+    config = {"configurable": {"thread_id": thread_id}}
+    app_graph = await get_app_graph()
+    snapshot = await app_graph.aget_state(config)
+    
+    if not snapshot.values:
+        # New thread or empty
+        return ChatResponse(
+            thread_id=thread_id,
+            messages=[],
+            status="ready"
+        )
+
+    proposed_actions, status = await _get_proposed_action_with_details(snapshot)
+    
+    return ChatResponse(
+        thread_id=thread_id,
+        messages=_format_messages(snapshot.values["messages"]),
+        proposed_actions=proposed_actions,
+        proposed_action=proposed_actions[0] if proposed_actions else None,
+        status=status
+    )
+
 @router.post("/message", response_model=ChatResponse)
 async def chat_message(request: ChatRequest):
     thread_id = request.thread_id or str(uuid.uuid4())
     config = {"configurable": {"thread_id": thread_id}}
+    
+    # Get the graph
+    app_graph = await get_app_graph()
+    
+    # Check for pending interruptions (sensitive tools waiting for approval)
+    # If the user sends a new message instead of approving/rejecting, we must cancel the pending tools
+    # to avoid "tool_use ids found without tool_result" errors from the LLM.
+    snapshot = await app_graph.aget_state(config)
+    if snapshot.next and "sensitive_tools" in snapshot.next:
+        if snapshot.values and "messages" in snapshot.values:
+            last_message = snapshot.values["messages"][-1]
+            if isinstance(last_message, AIMessage) and last_message.tool_calls:
+                # Auto-reject pending tools because user sent a new message
+                tool_outputs = []
+                for tool_call in last_message.tool_calls:
+                    tool_outputs.append(ToolMessage(
+                        tool_call_id=tool_call["id"],
+                        content="Action cancelled by user (new message received).",
+                        name=tool_call["name"]
+                    ))
+                
+                await app_graph.aupdate_state(
+                    config,
+                    {"messages": tool_outputs},
+                    as_node="sensitive_tools"
+                )
     
     # Run the graph
     # If this is a new thread or continuing, we pass the new message
@@ -112,7 +189,7 @@ async def chat_message(request: ChatRequest):
     )
     
     # Check if we are interrupted
-    snapshot = app_graph.get_state(config)
+    snapshot = await app_graph.aget_state(config)
     
     proposed_actions, status = await _get_proposed_action_with_details(snapshot)
     
@@ -127,7 +204,9 @@ async def chat_message(request: ChatRequest):
 @router.post("/approve", response_model=ChatResponse)
 async def approve_action(request: ApproveRequest):
     config = {"configurable": {"thread_id": request.thread_id}}
-    snapshot = app_graph.get_state(config)
+    
+    app_graph = await get_app_graph()
+    snapshot = await app_graph.aget_state(config)
     
     if not snapshot.next:
         raise HTTPException(status_code=400, detail="No pending action to approve")
@@ -207,7 +286,7 @@ async def approve_action(request: ApproveRequest):
             ))
 
     # Update state with ALL outputs
-    app_graph.update_state(
+    await app_graph.aupdate_state(
         config, 
         {"messages": tool_outputs}, 
         as_node="sensitive_tools" 
@@ -217,7 +296,7 @@ async def approve_action(request: ApproveRequest):
     final_state = await app_graph.ainvoke(None, config=config)
     
     # Check if there are more actions or if we are done
-    snapshot = app_graph.get_state(config)
+    snapshot = await app_graph.aget_state(config)
     
     proposed_actions, status = await _get_proposed_action_with_details(snapshot)
             
@@ -232,7 +311,9 @@ async def approve_action(request: ApproveRequest):
 @router.post("/reject", response_model=ChatResponse)
 async def reject_action(request: RejectRequest):
     config = {"configurable": {"thread_id": request.thread_id}}
-    snapshot = app_graph.get_state(config)
+    
+    app_graph = await get_app_graph()
+    snapshot = await app_graph.aget_state(config)
     
     if not snapshot.next:
         raise HTTPException(status_code=400, detail="No pending action to reject")
@@ -253,7 +334,7 @@ async def reject_action(request: RejectRequest):
             name=tool_call["name"]
         ))
     
-    app_graph.update_state(
+    await app_graph.aupdate_state(
         config, 
         {"messages": tool_outputs}, 
         as_node="sensitive_tools" 
@@ -262,7 +343,7 @@ async def reject_action(request: RejectRequest):
     # Now resume.
     final_state = await app_graph.ainvoke(None, config=config)
     
-    snapshot = app_graph.get_state(config)
+    snapshot = await app_graph.aget_state(config)
     
     proposed_actions, status = await _get_proposed_action_with_details(snapshot)
 
