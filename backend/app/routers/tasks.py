@@ -1,7 +1,9 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from typing import Optional, List, Any
-from app.mcp_client.todoist_client import todoist_client
+from sqlmodel.ext.asyncio.session import AsyncSession
+from app.core.db import get_session
+from app.services.task_service import TaskService
 
 router = APIRouter()
 
@@ -18,18 +20,23 @@ class TaskUpdate(BaseModel):
     priority: Optional[int] = None
 
 @router.get("/")
-async def get_tasks():
-    """Fetch all tasks via MCP."""
-    try:
-        return await todoist_client.list_tasks()
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+async def get_tasks(session: AsyncSession = Depends(get_session)):
+    """Fetch all tasks from local DB."""
+    service = TaskService(session)
+    return await service.get_all_tasks()
+
+@router.post("/sync")
+async def sync_tasks(session: AsyncSession = Depends(get_session)):
+    """Trigger full sync from Todoist to local DB."""
+    service = TaskService(session)
+    return await service.sync_tasks()
 
 @router.post("/")
-async def create_task(task: TaskCreate):
-    """Create a task via MCP."""
+async def create_task(task: TaskCreate, session: AsyncSession = Depends(get_session)):
+    """Create a task via MCP and update local DB."""
     try:
-        return await todoist_client.create_task(
+        service = TaskService(session)
+        return await service.create_task(
             content=task.content,
             description=task.description,
             due_string=task.due_string,
@@ -39,10 +46,11 @@ async def create_task(task: TaskCreate):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.put("/{task_id}")
-async def update_task(task_id: str, task: TaskUpdate):
-    """Update a task via MCP."""
+async def update_task(task_id: str, task: TaskUpdate, session: AsyncSession = Depends(get_session)):
+    """Update a task via MCP and update local DB."""
     try:
-        return await todoist_client.update_task(
+        service = TaskService(session)
+        return await service.update_task(
             task_id=task_id,
             content=task.content,
             description=task.description,
@@ -53,17 +61,21 @@ async def update_task(task_id: str, task: TaskUpdate):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.delete("/{task_id}")
-async def delete_task(task_id: str):
-    """Delete a task via MCP."""
+async def delete_task(task_id: str, session: AsyncSession = Depends(get_session)):
+    """Delete a task via MCP and local DB."""
     try:
-        return await todoist_client.delete_task(task_id)
+        service = TaskService(session)
+        await service.delete_task(task_id)
+        return {"status": "success"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/{task_id}/close")
-async def close_task(task_id: str):
-    """Close (complete) a task via MCP."""
+async def close_task(task_id: str, session: AsyncSession = Depends(get_session)):
+    """Close (complete) a task via MCP and remove from local DB."""
     try:
-        return await todoist_client.close_task(task_id)
+        service = TaskService(session)
+        await service.close_task(task_id)
+        return {"status": "success"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

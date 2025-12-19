@@ -57,6 +57,9 @@ class TodoistClient:
     async def list_tasks(self):
         return await self._run_tool("list_tasks")
 
+    async def get_task(self, task_id):
+        return await self._run_tool("get_task", {"task_id": task_id})
+
     async def create_task(self, content, description=None, due_string=None, priority=None):
         return await self._run_tool("create_task", {
             "content": content,
