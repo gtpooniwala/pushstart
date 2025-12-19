@@ -11,6 +11,19 @@ interface ChatPanelProps {
   threadId: string | null;
   setThreadId: (id: string) => void;
   setProposedActions: (actions: any[]) => void;
+  proposedActions: any[];
+  messages: Message[];
+  setMessages: (messages: Message[] | ((prev: Message[]) => Message[])) => void;
+}
+
+function TypingIndicator() {
+  return (
+    <div className="flex items-center gap-1 p-3 bg-gray-100 dark:bg-gray-800 rounded-lg w-fit">
+      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+    </div>
+  );
 }
 
 function ToolOutput({ content }: { content: string }) {
@@ -81,8 +94,7 @@ function ToolCallDisplay({ toolCalls }: { toolCalls: any[] }) {
   );
 }
 
-export default function ChatPanel({ threadId, setThreadId, setProposedActions }: ChatPanelProps) {
-  const [messages, setMessages] = useState<Message[]>([]);
+export default function ChatPanel({ threadId, setThreadId, setProposedActions, proposedActions, messages, setMessages }: ChatPanelProps) {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -94,6 +106,27 @@ export default function ChatPanel({ threadId, setThreadId, setProposedActions }:
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  useEffect(() => {
+    if (threadId) {
+      const fetchState = async () => {
+        try {
+          const res = await fetch(`http://localhost:8000/chat/${threadId}`);
+          if (res.ok) {
+            const data = await res.json();
+            setMessages(data.messages);
+            setProposedActions(data.proposed_actions || []);
+          }
+        } catch (e) {
+          console.error("Failed to fetch chat state", e);
+        }
+      };
+      fetchState();
+    } else {
+      setMessages([]);
+      setProposedActions([]);
+    }
+  }, [threadId, setProposedActions]);
 
   const sendMessage = async () => {
     if (!input.trim() || isLoading) return;
@@ -189,8 +222,14 @@ export default function ChatPanel({ threadId, setThreadId, setProposedActions }:
         )}
         {isLoading && (
           <div className="flex justify-start">
-            <div className="bg-gray-100 dark:bg-gray-800 rounded-lg p-3">
-              <span className="animate-pulse">Thinking...</span>
+            <TypingIndicator />
+          </div>
+        )}
+        {!isLoading && proposedActions.length > 0 && (
+          <div className="flex justify-start">
+            <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3 text-sm text-yellow-800 dark:text-yellow-200 flex items-center gap-2">
+              <span>⚠️</span>
+              <span>Waiting for your approval in the side panel...</span>
             </div>
           </div>
         )}
@@ -212,10 +251,10 @@ export default function ChatPanel({ threadId, setThreadId, setProposedActions }:
           <button
             onClick={sendMessage}
             disabled={!input.trim() || isLoading}
-            className="absolute right-2 bottom-2 p-1.5 text-blue-600 hover:bg-blue-50 dark:hover:bg-gray-700 rounded-md disabled:opacity-50"
+            className="absolute right-2 bottom-1 p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-gray-700 rounded-md disabled:opacity-50"
           >
             <svg
-              className="w-5 h-5"
+              className="w-6 h-6"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"

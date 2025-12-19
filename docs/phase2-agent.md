@@ -23,8 +23,8 @@ No calendar logic yet.
 - [x] **Write-Through Policy**: All writes go to Todoist (MCP) -> Local DB. Reads come from Local DB.
 - [x] **Frontend Chat UI**: Chat panel with collapsible tool outputs and "Proposed Action" cards.
 - [x] **Sync Mechanism**: Manual sync button and auto-update on writes.
-- [ ] **Chat History**: Persistence of chat sessions (currently in-memory/ephemeral).
-- [ ] **Sidebar Enhancements**: Workflow selection, Agent mode switching.
+- [x] **Chat History**: Persistence of chat sessions (using `langgraph-checkpoint-postgres`).
+- [x] **Sidebar Enhancements**: Workflow selection (History), Agent mode switching (New Chat).
 
 ---
 

@@ -12,6 +12,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the MCP code
 COPY todoist_server/ /app/todoist_server/
+COPY calendar_server/ /app/calendar_server/
 
 # Set PYTHONPATH
 ENV PYTHONPATH=/app

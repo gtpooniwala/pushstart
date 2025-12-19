@@ -9,4 +9,6 @@ __pycache__/
 coverage/
 test_output.txt
 .vscode/
+token.json
+credentials.json
 

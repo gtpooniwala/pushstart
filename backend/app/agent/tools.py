@@ -4,6 +4,8 @@ from app.core.db import engine
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlalchemy.orm import sessionmaker
 from app.services.task_service import TaskService
+from app.services.calendar_service import CalendarService
+from app.mcp_client.calendar_client import calendar_client
 
 async def get_service():
     async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
@@ -50,9 +52,33 @@ async def list_tasks():
     async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     async with async_session() as session:
         service = TaskService(session)
-        return await service.get_all_tasks()
+        return await service.list_tasks()
 
-SAFE_TOOLS = [list_tasks]
-SENSITIVE_TOOLS = [create_task, update_task, delete_task, complete_task]
+@tool
+async def list_calendar_events(days: int = 7):
+    """List upcoming calendar events."""
+    async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    async with async_session() as session:
+        service = CalendarService(session)
+        return await service.list_events(days)
+
+@tool
+async def create_calendar_event(summary: str, start_time: str, end_time: str, description: str = ""):
+    """Create a new calendar event. Times must be ISO format strings."""
+    async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    async with async_session() as session:
+        service = CalendarService(session)
+        return await service.create_event(summary, start_time, end_time, description)
+
+@tool
+async def find_free_blocks(duration_minutes: int = 60, days: int = 3):
+    """Find free time blocks in the calendar."""
+    async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    async with async_session() as session:
+        service = CalendarService(session)
+        return await service.find_free_blocks(duration_minutes, days)
+
+SAFE_TOOLS = [list_tasks, list_calendar_events, find_free_blocks]
+SENSITIVE_TOOLS = [create_task, update_task, delete_task, complete_task, create_calendar_event]
 ALL_TOOLS = SAFE_TOOLS + SENSITIVE_TOOLS
 

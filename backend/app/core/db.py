@@ -6,6 +6,7 @@ import os
 import asyncio
 import logging
 from app.models.task import Task
+from app.models.event import Event
 
 # Docker default
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+asyncpg://pushstart:pushstart_password@localhost:5432/pushstart_db")

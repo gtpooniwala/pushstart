@@ -16,6 +16,9 @@ cleanup() {
     if [ -n "$MCP_PID" ]; then
         kill $MCP_PID 2>/dev/null
     fi
+    if [ -n "$CALENDAR_MCP_PID" ]; then
+        kill $CALENDAR_MCP_PID 2>/dev/null
+    fi
     # Stop Docker containers
     echo "🐳 Stopping Docker containers..."
     if command -v docker-compose &> /dev/null; then
@@ -87,14 +90,21 @@ export PYTHONPATH=$PYTHONPATH:$(pwd)
 python3 -m uvicorn todoist_server.server:app --port 8001 &
 MCP_PID=$!
 
+# 3b. Start Calendar MCP Server (Local)
+echo "🔌 Starting Calendar MCP Server (Local)..."
+# Install dependencies
+pip install -r calendar_server/requirements.txt > /dev/null 2>&1
+python3 -m uvicorn calendar_server.server:app --port 8002 &
+CALENDAR_MCP_PID=$!
+
 # Wait for MCP Server to be ready
-echo "   Waiting for MCP server to be ready..."
+echo "   Waiting for MCP servers to be ready..."
 for i in {1..30}; do
-    if nc -z localhost 8001 2>/dev/null; then
-        echo "   ✅ MCP Server is ready!"
+    if nc -z localhost 8001 2>/dev/null && nc -z localhost 8002 2>/dev/null; then
+        echo "   ✅ MCP Servers are ready!"
         break
     fi
-    echo "   ...waiting for port 8001..."
+    echo "   ...waiting for ports 8001/8002..."
     sleep 1
 done
 

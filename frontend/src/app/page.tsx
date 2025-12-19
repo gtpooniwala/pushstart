@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import ChatPanel from "@/components/ChatPanel";
 import RightPanel from "@/components/RightPanel";
 import HistoryPanel from "@/components/HistoryPanel";
@@ -12,6 +13,27 @@ export default function Home() {
   // Agent State
   const [proposedActions, setProposedActions] = useState<any[]>([]);
   const [threadId, setThreadId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<any[]>([]);
+
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
+  // Sync from URL on mount/update
+  useEffect(() => {
+    const tid = searchParams.get("threadId");
+    if (tid !== threadId) {
+      setThreadId(tid || null);
+    }
+  }, [searchParams]);
+
+  const handleThreadChange = (newId: string | null) => {
+    setThreadId(newId);
+    if (newId) {
+      router.push(`/?threadId=${newId}`);
+    } else {
+      router.push("/");
+    }
+  };
 
   // Set initial width based on screen size
   useEffect(() => {
@@ -62,15 +84,18 @@ export default function Home() {
     <main className="flex h-screen w-full overflow-hidden bg-white dark:bg-gray-950">
       {/* Left Panel - History */}
       <div className="w-64 flex-shrink-0 border-r border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 hidden md:flex flex-col">
-        <HistoryPanel />
+        <HistoryPanel onSelectThread={handleThreadChange} currentThreadId={threadId} />
       </div>
 
       {/* Center Panel - Chat */}
       <div className="flex-1 min-w-0 bg-white dark:bg-gray-900">
         <ChatPanel 
           threadId={threadId} 
-          setThreadId={setThreadId}
+          setThreadId={handleThreadChange}
           setProposedActions={setProposedActions}
+          proposedActions={proposedActions}
+          messages={messages}
+          setMessages={setMessages}
         />
       </div>
 
@@ -87,7 +112,18 @@ export default function Home() {
       >
         <RightPanel 
           proposedActions={proposedActions} 
-          onActionHandled={() => setProposedActions([])}
+          onActionHandled={(data) => {
+            if (data) {
+              setMessages(data.messages);
+              if (data.proposed_actions && data.proposed_actions.length > 0) {
+                setProposedActions(data.proposed_actions);
+              } else {
+                setProposedActions([]);
+              }
+            } else {
+              setProposedActions([]);
+            }
+          }}
           threadId={threadId}
         />
       </div>

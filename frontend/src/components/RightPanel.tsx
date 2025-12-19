@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
 import TaskList from "./TaskList";
+import CalendarView from "./CalendarView";
 
 interface RightPanelProps {
   proposedActions: any[];
-  onActionHandled: () => void;
+  onActionHandled: (data?: { messages: any[], proposed_actions?: any[] }) => void;
   threadId: string | null;
 }
 
@@ -87,6 +88,24 @@ function ProposedActionCard({ action, isSelected, onToggle }: { action: any, isS
         )}
       </div>
     );
+  } else if (name === "create_calendar_event") {
+    content = (
+      <div>
+        <div className="text-xs text-purple-500 uppercase tracking-wider mb-1">Scheduling Event</div>
+        <div className="font-medium text-lg mb-2">{args.summary}</div>
+        <div className="text-sm text-gray-600 dark:text-gray-300 mb-2">
+          <span className="font-semibold">Start:</span> {new Date(args.start_time).toLocaleString()}
+        </div>
+        <div className="text-sm text-gray-600 dark:text-gray-300 mb-2">
+          <span className="font-semibold">End:</span> {new Date(args.end_time).toLocaleString()}
+        </div>
+        {args.description && (
+          <div className="text-sm text-gray-600 dark:text-gray-300">
+            <span className="font-semibold">Desc:</span> {args.description}
+          </div>
+        )}
+      </div>
+    );
   } else {
     // Fallback
     content = (
@@ -130,6 +149,7 @@ export default function RightPanel({ proposedActions, onActionHandled, threadId 
   const [isProcessing, setIsProcessing] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [activeTab, setActiveTab] = useState<"tasks" | "calendar">("tasks");
 
   // Initialize selection when actions change
   useEffect(() => {
@@ -154,7 +174,7 @@ export default function RightPanel({ proposedActions, onActionHandled, threadId 
     if (!threadId || !proposedActions.length) return;
     setIsProcessing(true);
     try {
-      await fetch("http://localhost:8000/chat/approve", {
+      const response = await fetch("http://localhost:8000/chat/approve", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -162,8 +182,12 @@ export default function RightPanel({ proposedActions, onActionHandled, threadId 
           approved_tool_call_ids: Array.from(selectedIds)
         }),
       });
-      setRefreshTrigger(prev => prev + 1);
-      onActionHandled();
+      
+      if (response.ok) {
+        const data = await response.json();
+        setRefreshTrigger(prev => prev + 1);
+        onActionHandled(data);
+      }
     } catch (e) {
       console.error("Error approving:", e);
     } finally {
@@ -175,7 +199,7 @@ export default function RightPanel({ proposedActions, onActionHandled, threadId 
     if (!threadId || !proposedActions.length) return;
     setIsProcessing(true);
     try {
-      await fetch("http://localhost:8000/chat/reject", {
+      const response = await fetch("http://localhost:8000/chat/reject", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -183,7 +207,11 @@ export default function RightPanel({ proposedActions, onActionHandled, threadId 
           reason: "Rejected via UI"
         }),
       });
-      onActionHandled();
+
+      if (response.ok) {
+        const data = await response.json();
+        onActionHandled(data);
+      }
     } catch (e) {
       console.error("Error rejecting:", e);
     } finally {
@@ -194,7 +222,28 @@ export default function RightPanel({ proposedActions, onActionHandled, threadId 
   return (
     <div className="h-full flex flex-col">
       <div className="p-4 border-b border-gray-200 dark:border-gray-800">
-        <h2 className="font-semibold text-lg">Tasks</h2>
+        <div className="flex space-x-4">
+          <button
+            onClick={() => setActiveTab("tasks")}
+            className={`pb-2 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === "tasks"
+                ? "border-blue-500 text-blue-600 dark:text-blue-400"
+                : "border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+            }`}
+          >
+            Tasks
+          </button>
+          <button
+            onClick={() => setActiveTab("calendar")}
+            className={`pb-2 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === "calendar"
+                ? "border-blue-500 text-blue-600 dark:text-blue-400"
+                : "border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+            }`}
+          >
+            Calendar
+          </button>
+        </div>
       </div>
       
       {proposedActions && proposedActions.length > 0 && (
@@ -239,7 +288,11 @@ export default function RightPanel({ proposedActions, onActionHandled, threadId 
       )}
 
       <div className="flex-1 overflow-y-auto p-4">
-        <TaskList refreshTrigger={refreshTrigger} />
+        {activeTab === "tasks" ? (
+          <TaskList refreshTrigger={refreshTrigger} />
+        ) : (
+          <CalendarView refreshTrigger={refreshTrigger} />
+        )}
       </div>
     </div>
   );
