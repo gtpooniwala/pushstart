@@ -1,0 +1,3 @@
+mcp
+todoist-api-python
+python-dotenv

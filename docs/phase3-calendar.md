@@ -2,44 +2,45 @@
 
 ## Goal
 
-Extend Pushstart into a full productivity assistant by adding:
+Transform Pushstart into a true productivity assistant by adding:
 
-- Calendar reading via Google Calendar MCP
-- Admin block proposals
-- HITL approvals for calendar modifications
-- Guided execution mode for admin sessions
-- Task classification + scheduling logic
+- Calendar integration through a **Google Calendar MCP server**
+- Scheduling logic (admin block proposals)
+- HITL approvals for all calendar writes
+- Guided execution mode during approved admin blocks
 
-Todoist and Calendar remain fully isolated behind MCP servers.
+Todoist and Calendar are both fully MCP-based.
 
 ---
 
 ## Architecture Overview
 
-- **Frontend:**  
-  - Chat  
-  - Right Panel  
-  - Approvals Tab  
-  - Guided Mode UI
-- **Backend:**  
-  - FastAPI  
-  - LangGraph agent orchestrator  
-  - MCP client for Todoist + Calendar
+- **Frontend:** Chat + Right Panel + Approvals Tab + Guided Mode
+- **Backend:** FastAPI + LangGraph agent
 - **Integrations:**  
-  - `mcp/todoist_server/`  
-  - `mcp/calendar_server/` (new)
+  - Todoist MCP server  
+  - Calendar MCP server (new)
 
-**Agent Flow:**
-Chat → Backend Agent → MCP Client → MCP Servers (Todoist + Calendar)
+### Data Flow
 
-css
+Agent:
+Chat → Backend Agent → MCP Client (Todoist/Calendar) → MCP Servers
+
+makefile
 Copy code
-
-**Manual Flow:**
-UI Actions → REST → Backend → MCP Client → MCP Servers
+Manual:
+UI → REST → Backend → MCP Client → MCP Servers
 
 yaml
 Copy code
+
+### Architectural Principle
+
+The backend continues to be the **sole MCP client**.  
+Agent nodes and REST handlers share the same MCP client modules:
+
+- `backend/mcp_client/todoist_client.py`
+- `backend/mcp_client/calendar_client.py`
 
 ---
 
@@ -48,85 +49,83 @@ Copy code
 ### Backend Extensions
 
 #### New MCP Integration
-Introduce a new MCP server:
 
-- Folder: `mcp/calendar_server/`
-- Capabilities:
-  - `calendar.list_events`
-  - `calendar.find_free_blocks`
-  - `calendar.create_event`
+Add `mcp/calendar_server/` implementing tools:
 
-Backend exposes **no direct API** for calendar integration; all calendar access goes through MCP.
+- `calendar.list_events`
+- `calendar.find_free_blocks`
+- `calendar.create_event`
+
+Backend uses a new MCP client module:
+
+- `backend/mcp_client/calendar_client.py`
+
+No direct Google API calls in backend.
 
 #### Agent Extensions (LangGraph)
-- Add task classification (atomic vs multi-step)
-- Add scheduling logic:
-  - Read calendar via MCP
+
+- Task classification (atomic vs multi-step)
+- Scheduling logic:
+  - Read events via MCP
   - Identify candidate admin blocks
-  - Propose admin block in chat
-- Introduce HITL:
-  - Agent pauses when proposing a block  
-  - Await approval from UI (Approvals tab)
-- Guided execution mode:
-  - Uses Todoist tasks via MCP
-  - Presents tasks step-by-step during the approved block
-  - Marks tasks complete via MCP
+  - Propose a block in chat
+- HITL approval:
+  - Agent pauses until frontend approves/rejects
+  - After approval → agent calls `calendar.create_event` via MCP
+- Guided mode logic:
+  - On block start, agent enters guided state
+  - Iterates through Todoist tasks via MCP
+  - Marks completed tasks via MCP
 
 #### Backend REST Endpoints
-- `/approvals/*` endpoints for controlling:
-  - Approve calendar events
-  - Reject proposals
 
-- Endpoint that triggers guided session state transitions.
+- `/approvals/*` for approving/rejecting block proposals
+- `/guided/*` for guided session transitions
 
 ---
 
 ### Frontend Extensions
 
 #### Approvals Tab
-- Displays proposed admin blocks
-- Buttons:
-  - **Approve** → Backend → MCP → Calendar MCP server → create event
-  - **Reject** → Backend clears proposal
+
+- Shows proposed admin blocks
+- User selects:
+  - **Approve** → backend → MCP → calendar event created
+  - **Reject**
 
 #### Guided Execution Mode
-- Activated when an admin block begins
-- Chat transforms to:
-  - “Task 1: …”
-  - Buttons: Done / Skip / Next
 
-UI state is driven by backend → MCP calls.
+- Activated at admin block start
+- Shows:
+  - Current task
+  - Controls: Done / Skip / Next
+- Driven entirely by backend agent state
 
 ---
 
 ## Out of Scope (Phase 3)
-- Gmail or email tools
-- Multi-user hardening
-- Complex priority algorithms
-- Notifications beyond calendar events
+
+- Gmail integration
+- Notifications (outside calendar)
+- Multi-user support
+- Advanced prioritisation algorithms
 
 ---
 
 ## User Stories
 
-1. Agent: “I suggest doing admin at 4pm today.”  
+1. Agent: “I suggest doing admin at 4pm today.”
    → Proposal appears in Approvals tab.
-
-2. Approve → Backend calls MCP → Calendar event created.
-
-3. At the start of an admin block:
-   - Guided mode activates.
-   - One-task-at-a-time workflow appears.
-   - Completing tasks updates Todoist through MCP.
-
-4. Rejecting a proposal cancels it.
+2. Approve → calendar event created through MCP.
+3. Admin block starts → guided mode begins.
+4. Tasks are presented one by one and updated via MCP.
+5. Rejecting a block cancels the proposal.
 
 ---
 
 ## Acceptance Criteria
 
-- All calendar interactions route exclusively through MCP.
-- No direct Google API usage in backend.
-- Agent pauses appropriately for human approval.
-- Guided mode reflects Todoist changes through MCP.
-- Calendar and tasks remain consistent.
+- All Todoist and Calendar access flows through MCP only.
+- Agent pauses correctly for HITL.
+- Guided mode operates deterministically.
+- Todoist and Calendar remain consistent with agent actions.

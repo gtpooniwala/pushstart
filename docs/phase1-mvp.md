@@ -2,33 +2,33 @@
 
 ## Goal
 
-Build the simplest viable version of Pushstart as a **manual task manager** backed by **Todoist**, using **MCP as the sole integration mechanism**, with no agents, no LLMs, and no calendar logic.
+Build the simplest viable version of Pushstart as a **manual task manager** backed by **Todoist**, using **MCP as the single integration mechanism**.  
+No agents, no LLMs, no scheduling, no calendar logic.
 
 This phase establishes:
 
-- The Right Panel UI (Task List)
-- Task CRUD through a backend REST API
-- Todoist integration via a **local Todoist MCP server**
-- A backend architecture that uses an **MCP client as its only integration layer**
-- A clean foundation for later agentic behaviour
+- The Right Panel Task UI
+- REST CRUD endpoints in the backend
+- Todoist integration through a **local Todoist MCP server**
+- A shared MCP client module used by all backend code
 
 ---
 
 ## Architecture Overview
 
-- **Frontend:** Next.js (TS)  
-  - Uses REST endpoints exposed by the backend
-- **Backend:** FastAPI (Python)  
-  - Uses an internal **mcp_client** module to communicate with MCP servers
+- **Frontend:** Next.js  
+- **Backend:** FastAPI (Python)
 - **Integrations:**  
-  - `mcp/todoist_server/` (the *only* place with Todoist API logic)
-- **No agent framework or LLM usage yet**
+  - `mcp/todoist_server/` (the only place with Todoist API code)
 
-**Data Flow (Manual only):**
-Frontend → REST → Backend → MCP Client → Todoist MCP Server → Todoist API
+### Data Flow (Phase 1)
 
-markdown
-Copy code
+Frontend UI → REST → Backend → MCP Client Module → Todoist MCP Server → Todoist API
+
+### Key Architectural Principle
+
+The **backend process itself is the MCP client**.  
+A shared Python module (`backend/mcp_client/todoist_client.py`) wraps MCP JSON-RPC calls for reuse.
 
 ---
 
@@ -37,71 +37,67 @@ Copy code
 ### Backend (FastAPI)
 
 #### Responsibilities
-- Expose REST endpoints for manual CRUD operations.
-- Use the **MCP client** for all Todoist operations.
-- No direct REST/SDK usage of Todoist inside backend.
-- No classification, scheduling, or LLM involvement.
+
+- Define REST endpoints that wrap Todoist CRUD calls through MCP.
+- No business logic beyond simple validation.
+- No task classification or agent behaviour.
 
 #### Endpoints
-- `GET /tasks`
-  - Fetch tasks via MCP.
-- `POST /tasks`
-  - Create a Todoist task via MCP.
-- `PUT /tasks/{id}`
-  - Edit Todoist task via MCP.
+
+- `GET /tasks`  
+  Fetch tasks via MCP.
+- `POST /tasks`  
+  Create a Todoist task via MCP.
+- `PUT /tasks/{id}`  
+  Update Todoist task fields.
 - `DELETE /tasks/{id}` (optional)
-  - Delete/archive a Todoist task via MCP.
 
 #### MCP Integration
-- Backend calls a lightweight **McpTodoistClient** module:
-  - `mcp_client/todoist_client.py`
-- MCP server:
-  - Lives in `mcp/todoist_server/`
-  - Backend connects over stdio/pipe or socket.
-- Phase 1 startup assumptions:
-  - MCP server may be manually started  
-  - or backend may implement "start on first request"
 
-### Frontend (Next.js)
+- A shared module `mcp_client/todoist_client.py`:
+  - Creates the MCP connection
+  - Calls MCP tools like `todoist.create_task`, `todoist.list_tasks`
+- Backend code imports this module directly.
+- MCP server is assumed running (manual or “start on first use”).
 
-#### Right Panel – Task List (Functional)
-- Fetch and render Todoist tasks.
-- Add tasks through backend → MCP.
-- Edit tasks.
-- Complete/uncomplete tasks.
-- Delete tasks (optional).
+### Frontend
+
+#### Right Panel – Task List
+
+- List tasks (via backend)
+- Add/edit/complete/delete tasks
+- Reflects Todoist state immediately
 
 #### Center Panel – Chat
-- Placeholder UI only.
-- No agent or chat behaviour yet.
+
+- Placeholder only (inactive in Phase 1)
 
 ---
 
 ## Out of Scope
-- LLM usage
-- Chat understanding
+
+- Any LLM or agent code
 - Task classification
-- Scheduling or calendar tools
-- Approvals tab
-- Guided workflows
-- Multi-user
-- Any direct API access (backend must use MCP only)
+- Calendar integration
+- Scheduling
+- Approvals
+- Guided mode
+- Multi-user logic
 
 ---
 
 ## User Stories
 
-1. I can manually add a task that shows in Todoist and in the UI.
-2. I can edit a task and see updates reflected in Todoist.
-3. I can mark a task complete via the UI.
-4. Refreshing the UI reloads tasks via MCP.
-5. No agent or LLM behaviour occurs.
+1. I can add a task manually and see it in Todoist and the UI.
+2. I can edit a task.
+3. I can complete or delete a task.
+4. Reloading the page reloads tasks via MCP.
 
 ---
 
 ## Acceptance Criteria
-- Backend uses MCP only for Todoist access—no direct REST calls.
-- UI CRUD operations work reliably.
-- No calendar logic exists.
-- No agent logic exists.
-- Task state persists through Todoist.
+
+- Backend uses MCP exclusively for Todoist access.
+- UI CRUD works reliably.
+- No LLM logic exists.
+- Todoist is the persistence layer.
