@@ -1,100 +1,107 @@
-# Phase 1 – MVP Specification
+# Phase 1 – Manual Task Hub (Todoist + MCP Only)
 
 ## Goal
 
-Deliver the smallest viable version of Pushstart that **actually changes behaviour**
-by:
+Build the simplest viable version of Pushstart as a **manual task manager** backed by **Todoist**, using **MCP as the sole integration mechanism**, with no agents, no LLMs, and no calendar logic.
 
-- Letting the user add tasks quickly
-- Classifying tasks simply (atomic vs multi-step)
-- Proposing and creating daily admin blocks in the calendar
-- Guiding the user through tasks during those blocks
-- Keeping all external actions **human-in-the-loop (HITL)**
+This phase establishes:
+
+- The Right Panel UI (Task List)
+- Task CRUD through a backend REST API
+- Todoist integration via a **local Todoist MCP server**
+- A backend architecture that uses an **MCP client as its only integration layer**
+- A clean foundation for later agentic behaviour
+
+---
+
+## Architecture Overview
+
+- **Frontend:** Next.js (TS)  
+  - Uses REST endpoints exposed by the backend
+- **Backend:** FastAPI (Python)  
+  - Uses an internal **mcp_client** module to communicate with MCP servers
+- **Integrations:**  
+  - `mcp/todoist_server/` (the *only* place with Todoist API logic)
+- **No agent framework or LLM usage yet**
+
+**Data Flow (Manual only):**
+Frontend → REST → Backend → MCP Client → Todoist MCP Server → Todoist API
+
+markdown
+Copy code
+
+---
 
 ## Scope
 
-### In Scope
+### Backend (FastAPI)
 
-- **Backend (FastAPI, Python)**
-  - Task model + persistence (Postgres)
-  - Basic REST endpoints:
-    - `POST /tasks`
-    - `GET /tasks`
-  - Simple classification logic:
-    - Atomic vs multi-step (rule-based and/or LLM-assisted)
-  - Scheduling logic to:
-    - Propose at least one daily admin block based on:
-      - current tasks
-      - simple time preferences
-  - Orchestration endpoint(s) to:
-    - Trigger “schedule admin block” agent workflow
+#### Responsibilities
+- Expose REST endpoints for manual CRUD operations.
+- Use the **MCP client** for all Todoist operations.
+- No direct REST/SDK usage of Todoist inside backend.
+- No classification, scheduling, or LLM involvement.
 
-- **Agent Layer**
-  - LLM-based orchestration in Python
-  - Uses MCP **calendar tool** only
-    - Read availability
-    - Propose admin block time
-    - Create a block only after user approval
-  - Basic reasoning rules:
-    - Prefer short blocks (e.g. 10–20 minutes) over long ones
-    - Avoid late-night scheduling
-    - Respect user’s default working hours (configurable later)
+#### Endpoints
+- `GET /tasks`
+  - Fetch tasks via MCP.
+- `POST /tasks`
+  - Create a Todoist task via MCP.
+- `PUT /tasks/{id}`
+  - Edit Todoist task via MCP.
+- `DELETE /tasks/{id}` (optional)
+  - Delete/archive a Todoist task via MCP.
 
-- **Frontend (Next.js, TS)**
-  - Simple UI to:
-    - Add tasks
-    - View list of tasks
-    - See upcoming admin block(s)
-    - Approve/reject proposed blocks
+#### MCP Integration
+- Backend calls a lightweight **McpTodoistClient** module:
+  - `mcp_client/todoist_client.py`
+- MCP server:
+  - Lives in `mcp/todoist_server/`
+  - Backend connects over stdio/pipe or socket.
+- Phase 1 startup assumptions:
+  - MCP server may be manually started  
+  - or backend may implement "start on first request"
 
-- **Guided Execution Mode (minimal)**
-  - A very simple guided view for an active admin session:
-    - Show “Current task”
-    - Buttons: “Done”, “Skip”, “Next”
-  - For Phase 1:
-    - Assume atomic tasks only inside guided mode
+### Frontend (Next.js)
 
-- **HITL**
-  - Any call that would lead to:
-    - Creating a calendar block
-    - Modifying or deleting a calendar block
-  - must be **approved by the user** in the UI or via a confirmation endpoint.
+#### Right Panel – Task List (Functional)
+- Fetch and render Todoist tasks.
+- Add tasks through backend → MCP.
+- Edit tasks.
+- Complete/uncomplete tasks.
+- Delete tasks (optional).
 
-### Out of Scope
+#### Center Panel – Chat
+- Placeholder UI only.
+- No agent or chat behaviour yet.
 
-- Email integration
-- WhatsApp or messaging integrations
-- Complex prioritisation algorithms
-- Multi-user support
-- Advanced UI/UX
-- Deep-work sessions (can be Phase 2+)
+---
+
+## Out of Scope
+- LLM usage
+- Chat understanding
+- Task classification
+- Scheduling or calendar tools
+- Approvals tab
+- Guided workflows
+- Multi-user
+- Any direct API access (backend must use MCP only)
+
+---
 
 ## User Stories
 
-1. **Task Capture**
-   - As a user, I can add a task in a few seconds from the UI.
-   - The task is saved and visible in a task list.
+1. I can manually add a task that shows in Todoist and in the UI.
+2. I can edit a task and see updates reflected in Todoist.
+3. I can mark a task complete via the UI.
+4. Refreshing the UI reloads tasks via MCP.
+5. No agent or LLM behaviour occurs.
 
-2. **Classification**
-   - As a user, I can see whether a task is treated as “atomic” or “multi-step”.
-
-3. **Scheduling Proposal**
-   - As a user, I see a suggested admin block in the next 24 hours when there are pending tasks.
-   - I can approve or reject the suggested block.
-
-4. **Calendar Integration (MCP)**
-   - When I approve a suggestion, the system creates a calendar event via the MCP calendar tool.
-   - No event is created without my explicit approval.
-
-5. **Guided Admin Session**
-   - During an active admin block, I can open a simple guided view.
-   - The system shows me one task at a time with basic “Done / Next / Skip”.
+---
 
 ## Acceptance Criteria
-
-- Tasks persist across server restarts.
-- The system can propose at least one admin block per day when tasks exist.
-- Calendar events are only created after user approval.
-- Guided mode works for a list of atomic tasks:
-  - Marking as done updates the backend.
-- All calendar write operations are routed through a HITL flow.
+- Backend uses MCP only for Todoist access—no direct REST calls.
+- UI CRUD operations work reliably.
+- No calendar logic exists.
+- No agent logic exists.
+- Task state persists through Todoist.
