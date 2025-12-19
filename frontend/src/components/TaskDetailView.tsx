@@ -44,6 +44,14 @@ export default function TaskDetailView({ task, onBack, onUpdate, onComplete }: T
   const [content, setContent] = useState(task.content);
   const [description, setDescription] = useState(task.description || "");
   const [dueString, setDueString] = useState(task.due_string || task.due?.string || task.raw_data?.due?.string || "");
+  const [dueDate, setDueDate] = useState(task.due?.date || task.due_date || "");
+
+  useEffect(() => {
+    setContent(task.content);
+    setDescription(task.description || "");
+    setDueString(task.due_string || task.due?.string || task.raw_data?.due?.string || "");
+    setDueDate(task.due?.date || task.due_date || "");
+  }, [task]);
   
   // Editing states
   const [isEditingContent, setIsEditingContent] = useState(false);
@@ -75,10 +83,10 @@ export default function TaskDetailView({ task, onBack, onUpdate, onComplete }: T
   };
 
   const handleSaveDue = async () => {
-    const currentDueString = task.due_string || task.due?.string || task.raw_data?.due?.string;
-    if (dueString !== currentDueString) {
-      // Send due_string update
-      await onUpdate(task.id, { due_string: dueString } as any);
+    const currentDueDate = task.due?.date || task.due_date;
+    if (dueDate !== currentDueDate) {
+      // Send due_string update (Todoist accepts YYYY-MM-DD as due_string)
+      await onUpdate(task.id, { due_string: dueDate } as any);
     }
     setIsEditingDue(false);
   };
@@ -174,12 +182,11 @@ export default function TaskDetailView({ task, onBack, onUpdate, onComplete }: T
             {isEditingDue ? (
               <input
                 ref={dueInputRef}
-                type="text"
-                value={dueString}
-                onChange={(e) => setDueString(e.target.value)}
+                type="date"
+                value={dueDate}
+                onChange={(e) => setDueDate(e.target.value)}
                 onBlur={handleSaveDue}
                 onKeyDown={(e) => e.key === 'Enter' && handleSaveDue()}
-                placeholder="Type a due date..."
                 className="w-full text-sm bg-transparent border-b-2 border-blue-500 outline-none py-1"
               />
             ) : (
@@ -188,7 +195,7 @@ export default function TaskDetailView({ task, onBack, onUpdate, onComplete }: T
                 className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 rounded py-1 px-2 -mx-2 transition-colors"
               >
                 <Clock className="h-4 w-4 text-gray-400" />
-                {dueString || "No due date"}
+                {dueString || dueDate || "No due date"}
               </div>
             )}
           </div>
