@@ -9,6 +9,19 @@ export default function Home() {
   const [rightPanelWidth, setRightPanelWidth] = useState(450);
   const [isResizing, setIsResizing] = useState(false);
 
+  // Set initial width based on screen size
+  useEffect(() => {
+    // Default to largest allowed size (800px) as requested, but ensure it fits
+    const maxAllowed = 800;
+    const sidebarWidth = 256; // w-64
+    const minChatWidth = 400; // Ensure chat has decent space
+    
+    const availableSpace = window.innerWidth - (window.innerWidth >= 768 ? sidebarWidth : 0);
+    const width = Math.min(maxAllowed, availableSpace - minChatWidth);
+    
+    setRightPanelWidth(Math.max(300, width));
+  }, []);
+
   const startResizing = useCallback(() => {
     setIsResizing(true);
   }, []);

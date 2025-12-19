@@ -11,6 +11,8 @@ import {
   AlertCircle
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import TaskDetailView from "./TaskDetailView";
+import LinkifiedText from "./LinkifiedText";
 
 interface TaskDue {
   date: string;
@@ -34,6 +36,7 @@ export default function TaskList() {
   const [newTask, setNewTask] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
 
   useEffect(() => {
     fetchTasks();
@@ -75,8 +78,10 @@ export default function TaskList() {
         body: JSON.stringify({ content: newTask }),
       });
       if (res.ok) {
+        const createdTask = await res.json();
         setNewTask("");
         fetchTasks();
+        setSelectedTask(createdTask);
       }
     } catch (error) {
       console.error("Failed to add task", error);
@@ -108,6 +113,44 @@ export default function TaskList() {
     }
   };
 
+  const handleUpdateTask = async (taskId: string, updates: Partial<Task>) => {
+    try {
+      // Optimistic update
+      setTasks(prev => prev.map(t => 
+        t.id === taskId ? { ...t, ...updates } : t
+      ));
+      
+      // Also update selected task if it's the one being edited
+      if (selectedTask && selectedTask.id === taskId) {
+        setSelectedTask(prev => prev ? { ...prev, ...updates } : null);
+      }
+
+      const res = await fetch(`http://localhost:8000/tasks/${taskId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          content: updates.content,
+          description: updates.description,
+          priority: updates.priority,
+          due_string: updates.due?.string,
+        }),
+      });
+
+      if (!res.ok) {
+        console.error("Failed to update task");
+        fetchTasks(); // Revert on failure
+      }
+    } catch (error) {
+      console.error("Error updating task", error);
+      fetchTasks(); // Revert on failure
+    }
+  };
+
+  const handleCompleteTask = async (taskId: string) => {
+    await closeTask(taskId);
+    setSelectedTask(null);
+  };
+
   if (loading && tasks.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-64 text-gray-500">
@@ -129,6 +172,17 @@ export default function TaskList() {
           Retry
         </button>
       </div>
+    );
+  }
+
+  if (selectedTask) {
+    return (
+      <TaskDetailView
+        task={selectedTask}
+        onBack={() => setSelectedTask(null)}
+        onUpdate={handleUpdateTask}
+        onComplete={handleCompleteTask}
+      />
     );
   }
 
@@ -158,12 +212,16 @@ export default function TaskList() {
           tasks.map((task) => (
             <div
               key={task.id}
-              className="group relative p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-700 hover:shadow-sm transition-all duration-200"
+              onClick={() => setSelectedTask(task)}
+              className="group relative p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-700 hover:shadow-sm transition-all duration-200 cursor-pointer"
             >
               <div className="flex items-start gap-3">
                 {/* Checkbox */}
                 <button
-                  onClick={() => closeTask(task.id)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    closeTask(task.id);
+                  }}
                   className="mt-0.5 text-gray-400 hover:text-green-500 transition-colors flex-shrink-0"
                 >
                   <Circle className="h-5 w-5" />
@@ -173,8 +231,8 @@ export default function TaskList() {
                 <div className="flex-1 min-w-0 space-y-1.5">
                   {/* Header Row: Content + Priority */}
                   <div className="flex items-start justify-between gap-2">
-                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100 leading-tight break-words">
-                      {task.content}
+                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100 leading-tight break-words whitespace-normal">
+                      <LinkifiedText text={task.content} truncateLinks={true} />
                     </p>
                     {/* Priority Flag - Only show if priority > 1 */}
                     {task.priority > 1 && (
@@ -184,8 +242,8 @@ export default function TaskList() {
 
                   {/* Description */}
                   {task.description && (
-                    <p className="text-xs text-gray-500 line-clamp-2 leading-relaxed">
-                      {task.description}
+                    <p className="text-xs text-gray-500 line-clamp-2 leading-relaxed break-words whitespace-normal">
+                      <LinkifiedText text={task.description} truncateLinks={true} />
                     </p>
                   )}
 
