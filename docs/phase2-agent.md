@@ -9,32 +9,51 @@ The agent can:
 - Add tasks  
 - Edit tasks  
 - Delete tasks  
+- List tasks (from local cache)
 
 No calendar logic yet.
 
 ---
 
+## Status Checklist
+
+- [x] **LangGraph Agent**: Implemented with `MemorySaver` for state persistence.
+- [x] **Human-in-the-Loop (HITL)**: Agent pauses for "sensitive" tools (create/update/delete) requiring user approval.
+- [x] **Local Database Cache**: PostgreSQL (Docker) + SQLModel implemented.
+- [x] **Write-Through Policy**: All writes go to Todoist (MCP) -> Local DB. Reads come from Local DB.
+- [x] **Frontend Chat UI**: Chat panel with collapsible tool outputs and "Proposed Action" cards.
+- [x] **Sync Mechanism**: Manual sync button and auto-update on writes.
+- [ ] **Chat History**: Persistence of chat sessions (currently in-memory/ephemeral).
+- [ ] **Sidebar Enhancements**: Workflow selection, Agent mode switching.
+
+---
+
 ## Architecture Overview
 
-- **Frontend:** Chat panel becomes active; Right Panel unchanged
-- **Backend:** FastAPI + LangGraph agent
+- **Frontend:** Chat panel active; Right Panel displays tasks from local DB.
+- **Backend:** FastAPI + LangGraph agent + PostgreSQL (Docker).
 - **Integrations:**  
   - Todoist MCP server (same as Phase 1)
+  - Local PostgreSQL Cache
 
 ### Data Flows
 
 '''
 Manual:
-Frontend → REST → Backend → MCP Client Module → Todoist MCP Server
+Frontend → REST (TaskService) → MCP Client → Todoist
+                              ↘ Local DB (Cache Update)
 
 Agentic:
-Chat → /chat → Backend Agent → MCP Client Module → Todoist MCP Server
+Chat → /chat → Backend Agent → TaskService → MCP Client → Todoist
+                                           ↘ Local DB (Cache Update)
 '''
 
 ### Architectural Principle
 
-Both manual flows and agent flows run **inside the same backend process**,  
-and both call the **same MCP client Python module**.
+**"Write-Through Cache"**:
+1.  **Reads**: Always read from the local PostgreSQL database for speed and stability.
+2.  **Writes**: Always execute on Todoist via MCP first, then immediately update the local database.
+3.  **Sync**: A `/sync` endpoint performs a full reconciliation (fetch all -> upsert -> delete stale).
 
 ---
 
@@ -47,35 +66,22 @@ and both call the **same MCP client Python module**.
 - `POST /chat`
   - Accepts a message
   - Routes to LangGraph agent
-  - Returns LLM-generated text
-  - Updates chat history
+  - Returns LLM-generated text or "Proposed Action"
+  - Handles Approval/Rejection of sensitive tools
 
 #### LangGraph Agent
 
 The backend agent:
 
 - Interprets user intent (“Add a task…”, “Rename that…”)
-- Performs task CRUD by calling MCP tools through the shared MCP client module
-- Returns confirmations to the frontend
-
-**Agent does NOT:**
-
-- Propose admin blocks
-- Use the calendar
-- Classify tasks (beyond minimal IDs)
-- Trigger guided execution
+- Uses `TaskService` tools to perform actions.
+- **Safe Tools**: `list_tasks` (runs automatically).
+- **Sensitive Tools**: `create_task`, `update_task`, `delete_task` (requires approval).
 
 #### MCP Integration
 
-- Same Todoist MCP server as Phase 1.
-- A shared Python module (`backend/mcp_client/todoist_client.py`) provides:
-  - `create_task(title)`
-  - `update_task(id, fields)`
-  - `delete_task(id)`
-  - `list_tasks()`
-
-The **backend process is the MCP client**.  
-Agent nodes simply call these helper methods.
+- A shared Python module (`backend/mcp_client/todoist_client.py`) wraps the MCP server.
+- **TaskService** (`backend/app/services/task_service.py`) orchestrates the calls between MCP and Local DB.
 
 ---
 
@@ -84,11 +90,13 @@ Agent nodes simply call these helper methods.
 #### Chat Panel
 
 - Sends/receives messages via `/chat`
-- Displays LLM responses
+- Displays "Proposed Action" cards for sensitive tools.
+- Allows User to "Approve" or "Reject" actions.
 
 #### Right Panel – Task List
 
-- Automatically refreshes when tasks change
+- Displays tasks from the local database.
+- Includes a "Sync" button to force a refresh from Todoist.
 
 ---
 
@@ -96,8 +104,8 @@ Agent nodes simply call these helper methods.
 
 - Any calendar access
 - Any scheduling proposals
-- Approvals tab
 - Guided mode
+
 - Multi-user support
 
 ---

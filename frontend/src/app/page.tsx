@@ -8,6 +8,10 @@ import HistoryPanel from "@/components/HistoryPanel";
 export default function Home() {
   const [rightPanelWidth, setRightPanelWidth] = useState(450);
   const [isResizing, setIsResizing] = useState(false);
+  
+  // Agent State
+  const [proposedAction, setProposedAction] = useState<any>(null);
+  const [threadId, setThreadId] = useState<string | null>(null);
 
   // Set initial width based on screen size
   useEffect(() => {
@@ -62,24 +66,30 @@ export default function Home() {
       </div>
 
       {/* Center Panel - Chat */}
-      <div className="flex-1 flex flex-col min-w-0 bg-white dark:bg-gray-950 relative">
-        <ChatPanel />
+      <div className="flex-1 min-w-0 bg-white dark:bg-gray-900">
+        <ChatPanel 
+          threadId={threadId} 
+          setThreadId={setThreadId}
+          setProposedAction={setProposedAction}
+        />
       </div>
 
-      {/* Resize Handle */}
+      {/* Resizer Handle */}
       <div
-        className={`w-1 cursor-col-resize hover:bg-blue-500 transition-colors flex-shrink-0 z-10 ${
-          isResizing ? "bg-blue-500" : "bg-gray-200 dark:bg-gray-800"
-        }`}
+        className="w-1 bg-gray-200 dark:bg-gray-800 hover:bg-blue-500 cursor-col-resize transition-colors"
         onMouseDown={startResizing}
       />
 
-      {/* Right Panel - Tasks & Context */}
-      <div 
+      {/* Right Panel - Tasks/Context */}
+      <div
         style={{ width: rightPanelWidth }}
-        className="flex-shrink-0 bg-gray-50 dark:bg-gray-900 flex flex-col"
+        className="flex-shrink-0 bg-gray-50 dark:bg-gray-950 border-l border-gray-200 dark:border-gray-800"
       >
-        <RightPanel />
+        <RightPanel 
+          proposedAction={proposedAction} 
+          onActionHandled={() => setProposedAction(null)}
+          threadId={threadId}
+        />
       </div>
     </main>
   );

@@ -69,11 +69,21 @@ Later phases can add MCP tools for:
 
 ## Current Phase
 
-**Phase 1 – Calendar-Based MVP**
+**Phase 2 – Agent Layer & Local Cache**
 
-The focus of Phase 1 is to:
-- Build the core backend & frontend skeleton
-- Implement manual task input
-- Use the agent + MCP calendar tool to propose and schedule **daily admin blocks**
-- Implement a basic guided execution mode for admin sessions
-- Enforce HITL for all calendar writes
+The focus of Phase 2 is to:
+- Introduce a LangGraph-based Agent for natural language task management.
+- Implement a **Local PostgreSQL Cache** for tasks to improve performance and stability.
+- Enforce a **Write-Through Cache Policy** (Write to Todoist -> Update Local DB).
+- Enhance the Frontend with a Chat Interface and "Proposed Action" approvals (HITL).
+- Prepare the system for Phase 3 (Calendar Integration).
+
+**Completed in Phase 2:**
+- LangGraph Agent with HITL for sensitive tools.
+- Local PostgreSQL Database (Docker).
+- TaskService for unified cache management.
+- Frontend Chat UI with diff-based approvals.
+
+**Pending in Phase 2:**
+- Chat History persistence.
+- Sidebar workflow selection.

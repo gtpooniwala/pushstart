@@ -12,6 +12,10 @@ export default function LinkifiedText({ text, truncateLinks = false, className =
   // Regex to match URLs (http/https)
   const urlRegex = /(https?:\/\/[^\s]+)/g;
   
+  if (typeof text !== 'string') {
+    return <span className={className}>{String(text)}</span>;
+  }
+  
   const parts = text.split(urlRegex);
 
   return (

@@ -8,7 +8,8 @@ import {
   Flag, 
   Plus, 
   Tag,
-  AlertCircle
+  AlertCircle,
+  RefreshCw
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import TaskDetailView from "./TaskDetailView";
@@ -27,8 +28,11 @@ interface Task {
   is_completed: boolean;
   priority: number; // 1 (normal) to 4 (urgent)
   due?: TaskDue | null;
+  due_string?: string | null;
+  due_date?: string | null;
   labels: string[];
   project_id: string;
+  raw_data?: any;
 }
 
 export default function TaskList() {
@@ -62,6 +66,18 @@ export default function TaskList() {
     } catch (error) {
       console.error("Failed to fetch tasks", error);
       setError("Network error connecting to backend");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const syncTasks = async () => {
+    setLoading(true);
+    try {
+      await fetch("http://localhost:8000/tasks/sync", { method: "POST" });
+      await fetchTasks();
+    } catch (error) {
+      console.error("Sync failed", error);
     } finally {
       setLoading(false);
     }
@@ -188,6 +204,17 @@ export default function TaskList() {
 
   return (
     <div className="space-y-6 p-1">
+      <div className="flex justify-between items-center">
+        <h2 className="text-xl font-bold">Tasks</h2>
+        <button 
+          onClick={syncTasks} 
+          className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors" 
+          title="Sync with Todoist"
+        >
+           <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+        </button>
+      </div>
+
       {/* Add Task Input */}
       <form onSubmit={addTask} className="relative group">
         <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
@@ -248,19 +275,25 @@ export default function TaskList() {
                   )}
 
                   {/* Metadata Row */}
-                  {(task.due || (task.labels && task.labels.length > 0)) && (
+                  {((task.due || task.due_string || task.raw_data?.due) || (task.labels && task.labels.length > 0)) && (
                     <div className="flex flex-wrap items-center gap-3 pt-1">
-                      {task.due && (
-                        <div className={cn(
-                          "flex items-center gap-1.5 text-xs",
-                          new Date(task.due.date) < new Date() ? "text-red-600 font-medium" : "text-gray-500"
-                        )}>
-                          <Calendar className="h-3.5 w-3.5" />
-                          <span>{task.due.string}</span>
-                        </div>
-                      )}
+                      {(task.due || task.due_string || task.raw_data?.due) && (() => {
+                        const dueString = task.due_string || task.due?.string || task.raw_data?.due?.string;
+                        const dueDate = task.due_date || task.due?.date || task.raw_data?.due?.date;
+                        if (!dueString) return null;
+                        
+                        return (
+                          <div className={cn(
+                            "flex items-center gap-1.5 text-xs",
+                            dueDate && new Date(dueDate) < new Date() ? "text-red-600 font-medium" : "text-gray-500"
+                          )}>
+                            <Calendar className="h-3.5 w-3.5" />
+                            <span>{dueString}</span>
+                          </div>
+                        );
+                      })()}
                       
-                      {task.labels && task.labels.length > 0 && (
+                      {task.labels && task.labels.map(label => (
                         <div className="flex items-center gap-2">
                           {task.labels.map(label => (
                             <span key={label} className="flex items-center gap-1 px-2 py-0.5 bg-gray-100 dark:bg-gray-700 rounded-full text-[10px] font-medium text-gray-600 dark:text-gray-300">

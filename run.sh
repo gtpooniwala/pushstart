@@ -13,6 +13,13 @@ cleanup() {
     if [ -n "$FRONTEND_PID" ]; then
         kill $FRONTEND_PID 2>/dev/null
     fi
+    # Stop Docker containers
+    echo "🐳 Stopping Docker containers..."
+    if command -v docker-compose &> /dev/null; then
+        docker-compose down
+    elif command -v docker &> /dev/null && docker compose version &> /dev/null; then
+        docker compose down
+    fi
     exit
 }
 
@@ -21,11 +28,27 @@ trap cleanup SIGINT
 
 echo "🚀 Starting Pushstart..."
 
-# Activate Conda Environment
+# 1. Start Docker (Database)
+echo "🐳 Starting Database (Docker)..."
+cd "$DIR"
+if command -v docker-compose &> /dev/null; then
+    docker-compose up -d
+elif command -v docker &> /dev/null && docker compose version &> /dev/null; then
+    docker compose up -d
+else
+    echo "❌ Docker Compose not found. Cannot start database."
+    exit 1
+fi
+
+# Wait for DB to be ready (simple sleep for now, could be improved with healthcheck)
+echo "   Waiting for database to initialize..."
+sleep 3
+
+# 2. Activate Conda Environment
 # Try to find conda profile script
 if [ -f "$HOME/miniconda3/etc/profile.d/conda.sh" ]; then
     source "$HOME/miniconda3/etc/profile.d/conda.sh"
-    elif [ -f "$HOME/anaconda3/etc/profile.d/conda.sh" ]; then
+elif [ -f "$HOME/anaconda3/etc/profile.d/conda.sh" ]; then
     source "$HOME/anaconda3/etc/profile.d/conda.sh"
 else
     # Fallback: try to use conda from path if available
@@ -35,22 +58,22 @@ else
 fi
 
 # Activate the environment
-conda activate pushstart || { echo "❌ Failed to activate conda environment 'pushstart'"; exit 1; }
+conda activate pushstart || { echo "❌ Failed to activate conda environment 'pushstart'. Run ./setup.sh first."; exit 1; }
 
-# Start Backend
+# 3. Start Backend
 echo "📦 Starting Backend (FastAPI)..."
 cd "$DIR/backend"
 # Check if uvicorn is available
 if ! command -v uvicorn &> /dev/null; then
-    echo "❌ Error: uvicorn not found. Please install backend dependencies."
-    echo "   cd backend && pip install -r requirements.txt (or pip install fastapi uvicorn ...)"
+    echo "❌ Error: uvicorn not found. Please run ./setup.sh"
     exit 1
 fi
 
-uvicorn app.main:app --reload --port 8000 &
+# Run uvicorn
+python3 -m uvicorn app.main:app --reload --port 8000 &
 BACKEND_PID=$!
 
-# Start Frontend
+# 4. Start Frontend
 echo "🎨 Starting Frontend (Next.js)..."
 cd "$DIR/frontend"
 npm run dev &

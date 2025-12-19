@@ -26,8 +26,11 @@ interface Task {
   is_completed: boolean;
   priority: number;
   due?: TaskDue | null;
+  due_string?: string | null;
+  due_date?: string | null;
   labels: string[];
   project_id: string;
+  raw_data?: any;
 }
 
 interface TaskDetailViewProps {
@@ -40,7 +43,7 @@ interface TaskDetailViewProps {
 export default function TaskDetailView({ task, onBack, onUpdate, onComplete }: TaskDetailViewProps) {
   const [content, setContent] = useState(task.content);
   const [description, setDescription] = useState(task.description || "");
-  const [dueString, setDueString] = useState(task.due?.string || "");
+  const [dueString, setDueString] = useState(task.due_string || task.due?.string || task.raw_data?.due?.string || "");
   
   // Editing states
   const [isEditingContent, setIsEditingContent] = useState(false);
@@ -72,8 +75,10 @@ export default function TaskDetailView({ task, onBack, onUpdate, onComplete }: T
   };
 
   const handleSaveDue = async () => {
-    if (dueString !== task.due?.string) {
-      await onUpdate(task.id, { due: dueString ? { string: dueString } : null } as any);
+    const currentDueString = task.due_string || task.due?.string || task.raw_data?.due?.string;
+    if (dueString !== currentDueString) {
+      // Send due_string update
+      await onUpdate(task.id, { due_string: dueString } as any);
     }
     setIsEditingDue(false);
   };

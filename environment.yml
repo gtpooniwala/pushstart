@@ -1,15 +1,22 @@
 name: pushstart
 channels:
-  - conda-forge
-  - defaults
+    - conda-forge
+    - defaults
 dependencies:
-  - python=3.10
-  - pip
-  - uvicorn
-  - fastapi
-  - httpx
-  - python-dotenv
-  - pip:
-    - mcp
-    - todoist-api-python
-    - dataclass-wizard==0.35.0
+    - python=3.10
+    - pip
+    - uvicorn
+    - fastapi
+    - httpx
+    - python-dotenv
+    - pip:
+          - mcp
+          - todoist-api-python
+          - dataclass-wizard==0.35.0
+          - langchain
+    - langchain-core
+    - langchain-anthropic
+    - langgraph
+    - sqlmodel
+    - asyncpg
+    - psycopg2-binary

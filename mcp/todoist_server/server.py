@@ -48,6 +48,15 @@ def list_tasks():
     return results
 
 @mcp.tool()
+def get_task(task_id: str):
+    """Get a single task by ID."""
+    try:
+        task = api.get_task(task_id=task_id)
+        return task.to_dict()
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+@mcp.tool()
 def create_task(content: str, description: Optional[str] = None, due_string: Optional[str] = None, priority: Optional[int] = None):
     """Create a new task."""
     try:
