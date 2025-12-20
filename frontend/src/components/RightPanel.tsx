@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import TaskList from "./TaskList";
 import CalendarView from "./CalendarView";
+import GuidedSessionView from "./GuidedSessionView";
 
 interface RightPanelProps {
   proposedActions: any[];
@@ -149,7 +150,7 @@ export default function RightPanel({ proposedActions, onActionHandled, threadId 
   const [isProcessing, setIsProcessing] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [refreshTrigger, setRefreshTrigger] = useState(0);
-  const [activeTab, setActiveTab] = useState<"tasks" | "calendar">("tasks");
+  const [activeTab, setActiveTab] = useState<"tasks" | "calendar" | "focus">("tasks");
 
   // Initialize selection when actions change
   useEffect(() => {
@@ -243,6 +244,16 @@ export default function RightPanel({ proposedActions, onActionHandled, threadId 
           >
             Calendar
           </button>
+          <button
+            onClick={() => setActiveTab("focus")}
+            className={`pb-2 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === "focus"
+                ? "border-blue-500 text-blue-600 dark:text-blue-400"
+                : "border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+            }`}
+          >
+            Focus
+          </button>
         </div>
       </div>
       
@@ -290,8 +301,10 @@ export default function RightPanel({ proposedActions, onActionHandled, threadId 
       <div className="flex-1 overflow-y-auto p-4">
         {activeTab === "tasks" ? (
           <TaskList refreshTrigger={refreshTrigger} />
-        ) : (
+        ) : activeTab === "calendar" ? (
           <CalendarView refreshTrigger={refreshTrigger} />
+        ) : (
+          <GuidedSessionView />
         )}
       </div>
     </div>

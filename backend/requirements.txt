@@ -15,3 +15,5 @@ langgraph-checkpoint-postgres
 psycopg
 psycopg-pool
 python-dateutil
+langchain-google-genai
+langchain-google-vertexai

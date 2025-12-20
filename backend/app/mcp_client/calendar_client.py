@@ -36,7 +36,11 @@ class CalendarClient:
                     # Single content block
                     text_content = result.content[0].text
                     try:
-                        return json.loads(text_content)
+                        data = json.loads(text_content)
+                        # Handle case where MCP returns a single dict for a list-returning tool
+                        if tool_name in ["list_events", "find_free_blocks"] and isinstance(data, dict) and "error" not in data:
+                            return [data]
+                        return data
                     except json.JSONDecodeError:
                         return text_content
         except Exception as e:

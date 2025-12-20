@@ -118,20 +118,116 @@ def create_event(summary: str, start_time: str, end_time: str, description: str 
 
 @mcp.tool()
 def find_free_blocks(duration_minutes: int = 60, days: int = 3) -> List[dict]:
-    """Find free time blocks of a specific duration."""
+    """Find free time blocks of a specific duration within working hours (9 AM - 5 PM)."""
     service = get_service()
     if not service:
         return [{"error": "Calendar service not configured."}]
         
-    # Simple implementation: Get events and find gaps
-    # This is a naive implementation for demonstration
-    events = list_events(days=days)
-    if events and "error" in events[0]:
-        return events
+    # Get calendar timezone
+    try:
+        cal_setting = service.calendars().get(calendarId='primary').execute()
+        time_zone = cal_setting.get('timeZone', 'UTC')
+    except:
+        time_zone = 'UTC'
 
-    # Logic to find gaps would go here
-    # For now, returning a placeholder
-    return [{"message": "Free block finding logic to be implemented"}]
+    import pytz
+    tz = pytz.timezone(time_zone)
+    
+    now = datetime.datetime.now(tz)
+    free_blocks = []
+
+    # Iterate through days
+    for i in range(days):
+        current_day = now + datetime.timedelta(days=i)
+        
+        # Define working hours for this day (9 AM to 5 PM)
+        work_start = current_day.replace(hour=9, minute=0, second=0, microsecond=0)
+        work_end = current_day.replace(hour=17, minute=0, second=0, microsecond=0)
+        
+        # Skip if work_end is in the past
+        if work_end < now:
+            continue
+            
+        # Adjust work_start if today and already past 9 AM
+        if i == 0 and now > work_start:
+            work_start = now
+            # Round up to next 30 mins
+            if work_start.minute < 30:
+                work_start = work_start.replace(minute=30, second=0, microsecond=0)
+            else:
+                work_start = (work_start + datetime.timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
+
+        if work_start >= work_end:
+            continue
+
+        # Fetch events for this day
+        day_start_iso = current_day.replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+        day_end_iso = current_day.replace(hour=23, minute=59, second=59, microsecond=0).isoformat()
+        
+        events_result = service.events().list(
+            calendarId='primary', 
+            timeMin=day_start_iso,
+            timeMax=day_end_iso,
+            singleEvents=True,
+            orderBy='startTime'
+        ).execute()
+        events = events_result.get('items', [])
+
+        # Find gaps
+        last_end = work_start
+        
+        for event in events:
+            # Parse event times
+            start_str = event['start'].get('dateTime')
+            if not start_str: continue # All-day event (skip for now or treat as blocking?)
+            
+            # Handle 'Z' for UTC
+            if start_str.endswith('Z'):
+                start_str = start_str[:-1] + '+00:00'
+                
+            event_start = datetime.datetime.fromisoformat(start_str)
+            
+            # Normalize timezone
+            if event_start.tzinfo is None:
+                event_start = tz.localize(event_start)
+            else:
+                event_start = event_start.astimezone(tz)
+
+            # If event starts after last_end, we have a gap
+            if event_start > last_end:
+                gap_duration = (event_start - last_end).total_seconds() / 60
+                if gap_duration >= duration_minutes:
+                    free_blocks.append({
+                        "start": last_end.isoformat(),
+                        "end": event_start.isoformat(),
+                        "duration_minutes": int(gap_duration)
+                    })
+            
+            # Update last_end
+            end_str = event['end'].get('dateTime')
+            if end_str:
+                if end_str.endswith('Z'):
+                    end_str = end_str[:-1] + '+00:00'
+                event_end = datetime.datetime.fromisoformat(end_str)
+                if event_end.tzinfo is None:
+                    event_end = tz.localize(event_end)
+                else:
+                    event_end = event_end.astimezone(tz)
+                
+                if event_end > last_end:
+                    last_end = event_end
+
+        # Check gap after last event until work_end
+        if last_end < work_end:
+            gap_duration = (work_end - last_end).total_seconds() / 60
+            if gap_duration >= duration_minutes:
+                free_blocks.append({
+                    "start": last_end.isoformat(),
+                    "end": work_end.isoformat(),
+                    "duration_minutes": int(gap_duration)
+                })
+
+    return free_blocks
 
 # Expose the SSE ASGI app for Uvicorn
 app = mcp.sse_app()

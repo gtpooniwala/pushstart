@@ -8,7 +8,7 @@ load_dotenv(dotenv_path=env_path)
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import tasks, chat, calendar
+from app.routers import tasks, chat, calendar, guided
 from app.core.db import init_db
 from app.agent.graph import close_graph
 
@@ -34,6 +34,7 @@ app.add_middleware(
 app.include_router(tasks.router, prefix="/tasks", tags=["tasks"])
 app.include_router(chat.router, prefix="/chat", tags=["chat"])
 app.include_router(calendar.router)
+app.include_router(guided.router)
 
 
 @app.get("/health")

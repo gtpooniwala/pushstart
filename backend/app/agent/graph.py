@@ -2,7 +2,7 @@ from typing import Literal, Optional
 from langgraph.graph import StateGraph, START, END
 from langgraph.prebuilt import ToolNode
 from langgraph.checkpoint.memory import MemorySaver
-from langchain_core.messages import HumanMessage, AIMessage
+from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 import os
 import asyncio
 
@@ -22,11 +22,38 @@ from app.agent.tools import ALL_TOOLS, SAFE_TOOLS, SENSITIVE_TOOLS
 llm = LLMFactory.get_llm()
 llm_with_tools = llm.bind_tools(ALL_TOOLS)
 
+SYSTEM_PROMPT = """You are Pushstart, an intelligent productivity assistant.
+Your goal is to help the user manage their tasks and schedule.
+
+You have access to the following tools:
+- Todoist: create, update, delete, complete, list tasks.
+- Calendar: list events, find free blocks, create events.
+
+GUIDELINES:
+1. When asked to schedule "admin time" or "focus blocks":
+   - First, use `find_free_blocks` to identify available slots.
+   - Then, propose a time to the user.
+   - If the user agrees, use `create_calendar_event` to book it.
+   - DO NOT book without confirmation.
+
+2. When the user wants to start working on a block:
+   - You can guide them through their tasks.
+   - Suggest they use the "Focus" tab in the UI.
+
+3. Always be concise and helpful.
+"""
+
 def chatbot(state: AgentState):
     """
     The main chatbot node. It invokes the LLM.
     """
     messages = state["messages"]
+    
+    # Prepend system message if it's not the first message
+    # (LangGraph usually handles state, but we want to ensure system prompt is there)
+    if not isinstance(messages[0], SystemMessage):
+        messages = [SystemMessage(content=SYSTEM_PROMPT)] + messages
+        
     response = llm_with_tools.invoke(messages)
     return {"messages": [response]}
 
