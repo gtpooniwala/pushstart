@@ -48,6 +48,16 @@ When orchestrating tasks and interacting with external systems:
 1. **Use MCP Tools for Integrations**
    - All calendar access should go through the MCP calendar tool.
    - Future integrations (email, messaging, etc.) will also be exposed as MCP tools.
+   - **Do not** attempt to call external APIs directly.
+
+2. **Rely on Service Layer for Data**
+   - The `TaskService` and other services handle caching and synchronization.
+   - Assume that `list_tasks` returns data from the local cache (fast).
+   - Assume that `create_task` and other mutations are write-through (update external app + local cache).
+
+3. **Human-in-the-Loop (HITL)**
+   - Sensitive actions (Create, Update, Delete) are intercepted by the system for user approval.
+   - The agent should propose these actions, but not assume they are executed until confirmed.
    - Do not call external APIs directly from orchestration logic.
 
 2. **HITL for Writes**

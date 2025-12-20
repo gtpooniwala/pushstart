@@ -12,6 +12,10 @@ class TaskService:
         result = await self.session.exec(select(Task).order_by(Task.order))
         return result.all()
 
+    async def list_tasks(self) -> List[Task]:
+        """Alias for get_all_tasks to match tool interface."""
+        return await self.get_all_tasks()
+
     async def get_task(self, task_id: str) -> Task | None:
         return await self.session.get(Task, task_id)
 

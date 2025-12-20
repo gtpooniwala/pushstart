@@ -7,18 +7,22 @@ The goal is to keep the codebase **predictable, testable, and agent-friendly.**
 
 ---
 
-## Repository Structure (planned)
+## Repository Structure
 
 - `backend/` – FastAPI, Python, Postgres access, orchestration endpoints
-  - `src/` – application code
+  - `app/` – application code (routers, services, models, agent)
   - `tests/` – backend tests
 
 - `frontend/` – Next.js, TypeScript
   - `src/` – UI code
   - `tests/` – frontend tests
 
+- `mcp/` – Model Context Protocol integrations
+  - `todoist_server/` – Todoist integration
+  - `calendar_server/` – Google Calendar integration
+  - `tests/` – MCP tests
+
 - `docs/` – documentation
-- `.github/workflows/` – CI config
 - `scripts/` – helper scripts (dev, DB migrations, etc.)
 
 ---

@@ -14,6 +14,7 @@ Instead of being a generic “todo app,” Pushstart acts more like a
 6. Keeps everything human-in-the-loop (HITL) for write actions
 
 The initial target user is a single individual (Gaurav) with:
+
 - High analytical ability
 - Strong deep-work capability
 - A tendency to avoid ambiguous, low-stimulation, administrivia-type tasks
@@ -28,6 +29,7 @@ The initial target user is a single individual (Gaurav) with:
 ## High-Level Architecture
 
 ### Frontend (Next.js, TypeScript)
+
 - UI for:
   - Adding tasks
   - Viewing upcoming admin/deep-work sessions
@@ -35,8 +37,11 @@ The initial target user is a single individual (Gaurav) with:
   - Running guided sessions (one step at a time)
 
 ### Backend (FastAPI, Python)
+
+- **Core Responsibility:** Algorithms, Orchestration, and LLM/Agent Systems.
+- **Location:** `backend/`
 - REST API for:
-  - Task CRUD
+  - Task CRUD (proxies to MCP + Cache)
   - Session data
   - User preferences/config
 - Scheduling logic:
@@ -45,6 +50,7 @@ The initial target user is a single individual (Gaurav) with:
   - Trigger agent workflows (e.g. “schedule admin blocks for next 24h”)
 
 ### Agent Layer (Python, LLM-based)
+
 - Uses MCP tools to interact with external systems
 - Responsibilities:
   - Task classification (atomic vs multi-step, etc.)
@@ -54,36 +60,63 @@ The initial target user is a single individual (Gaurav) with:
 
 ### Integrations via MCP
 
-Pushstart does **not** talk directly to external APIs inside core logic.
-Instead, it uses MCP tools, which expose capabilities like:
+- **Core Design Principle:** All app integrations reside in the `mcp/` folder.
+- The backend does **not** contain direct integration logic (e.g., Todoist API calls). It uses MCP clients to communicate with MCP servers.
+- **Current Integrations:**
+  - `mcp/todoist_server`: Manages tasks.
+  - `mcp/calendar_server`: Manages events (Google Calendar).
 
-- `calendar.list_events`
-- `calendar.find_free_slots`
-- `calendar.propose_block`
-- `calendar.create_block` (HITL-gated)
+Pushstart uses MCP tools which expose capabilities like:
 
-Later phases can add MCP tools for:
-- Email (draft/send/reply)
-- Messaging platforms
-- Notion or other task/knowledge sources
+- `todoist.list_tasks`, `todoist.create_task`, etc.
+- `calendar.list_events`, `calendar.find_free_slots`, etc.
 
-## Current Phase
+## Data & Caching Strategy
 
-**Phase 2 – Agent Layer & Local Cache**
+Since Pushstart relies heavily on external apps (Todoist, Google Calendar) as the source of truth, we implement a **Local PostgreSQL Cache** to ensure performance and stability.
 
-The focus of Phase 2 is to:
-- Introduce a LangGraph-based Agent for natural language task management.
-- Implement a **Local PostgreSQL Cache** for tasks to improve performance and stability.
-- Enforce a **Write-Through Cache Policy** (Write to Todoist -> Update Local DB).
-- Enhance the Frontend with a Chat Interface and "Proposed Action" approvals (HITL).
-- Prepare the system for Phase 3 (Calendar Integration).
+### Cache Policy: Write-Through
 
-**Completed in Phase 2:**
-- LangGraph Agent with HITL for sensitive tools.
-- Local PostgreSQL Database (Docker).
-- TaskService for unified cache management.
-- Frontend Chat UI with diff-based approvals.
+- **Reads:** All read operations (e.g., listing tasks in the UI) are served directly from the **Local DB**. This ensures fast load times and offline capability.
+- **Writes:** All write operations (Create, Update, Delete) follow a **Write-Through** pattern:
+  1. **Write to External App:** The backend calls the MCP tool to perform the action on the external service (e.g., Todoist).
+  2. **Update Local Cache:** Upon success, the local database is immediately updated to reflect the change.
+- **Sync:** A "Full Sync" operation is available to reconcile any drift between the external app and the local cache (e.g., changes made directly in the Todoist app).
 
-**Pending in Phase 2:**
-- Chat History persistence.
-- Sidebar workflow selection.
+## Phases
+**Phase 1 – Basic Todoist Integration (Completed)**
+This phase established the foundational architecture with basic Todoist CRUD operations via MCP.
+
+**Phase 2 – Agent Layer & Local Cache (Completed)**
+
+We have successfully implemented the core agentic workflow and local caching layer.
+
+**Key Achievements:**
+
+- **LangGraph Agent:** A sophisticated agent that can manage tasks via natural language.
+- **Human-in-the-Loop (HITL):** Sensitive actions (Create/Update/Delete) require explicit user approval via the UI.
+- **Local PostgreSQL Cache:** Robust caching with Write-Through policy for Todoist tasks.
+- **Chat Interface:** A rich chat UI with "Proposed Action" cards for HITL interactions.
+- **Chat History:** Persistent chat sessions stored in Postgres.
+
+**Phase 3 – Calendar Integration (Completed)**
+
+We have successfully integrated Google Calendar via MCP and implemented scheduling logic.
+
+**Key Achievements:**
+
+- **Google Calendar MCP:** Full read/write access to calendar events via a dedicated MCP server.
+- **Scheduling Logic:** The agent can find free slots and propose time blocks for tasks.
+- **Guided Sessions:** (Foundation laid) The system can identify and work with scheduled blocks.
+- **Unified MCP Architecture:** Both Todoist and Calendar are accessed strictly through MCP clients.
+
+**Next Up: Advanced Orchestration & Multi-Modal Inputs**
+
+- Email integration.
+- Whatsapp integration.
+- LinkedIn integration.
+- More complex agentic workflows (e.g., "Plan my week").
+- Voice input/output.
+- Enhanced workflows for guided sessions.
+- Deployment to cloud infrastructure.
+- Android/iOS mobile app.
