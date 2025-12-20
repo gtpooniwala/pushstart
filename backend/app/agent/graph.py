@@ -5,6 +5,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 import os
 import asyncio
+from datetime import datetime
 
 # Try to import PostgresSaver
 try:
@@ -22,8 +23,9 @@ from app.agent.tools import ALL_TOOLS, SAFE_TOOLS, SENSITIVE_TOOLS
 llm = LLMFactory.get_llm()
 llm_with_tools = llm.bind_tools(ALL_TOOLS)
 
-SYSTEM_PROMPT = """You are Pushstart, an intelligent productivity assistant.
+SYSTEM_PROMPT_TEMPLATE = """You are Pushstart, an intelligent productivity assistant.
 Your goal is to help the user manage their tasks and schedule.
+Current Date: {current_date}
 
 You have access to the following tools:
 - Todoist: create, update, delete, complete, list tasks.
@@ -52,7 +54,9 @@ def chatbot(state: AgentState):
     # Prepend system message if it's not the first message
     # (LangGraph usually handles state, but we want to ensure system prompt is there)
     if not isinstance(messages[0], SystemMessage):
-        messages = [SystemMessage(content=SYSTEM_PROMPT)] + messages
+        current_date = datetime.now().strftime("%A, %d %B %Y")
+        formatted_prompt = SYSTEM_PROMPT_TEMPLATE.format(current_date=current_date)
+        messages = [SystemMessage(content=formatted_prompt)] + messages
         
     response = llm_with_tools.invoke(messages)
     return {"messages": [response]}

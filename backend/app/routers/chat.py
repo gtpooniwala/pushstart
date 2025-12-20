@@ -2,19 +2,38 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 import uuid
+from datetime import datetime
 
-from langchain_core.messages import HumanMessage, ToolMessage, AIMessage
+from langchain_core.messages import HumanMessage, ToolMessage, AIMessage, SystemMessage
 from app.agent.graph import get_app_graph
 from app.agent.tools import SENSITIVE_TOOLS, SAFE_TOOLS
 from app.core.db import engine
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlalchemy.orm import sessionmaker
+from sqlmodel import select
 from app.services.task_service import TaskService
+from app.models.thread import Thread
+from app.core.llm import LLMFactory
 
 router = APIRouter()
 
 # Create a map of tools for easy lookup
 TOOL_MAP = {t.name: t for t in SENSITIVE_TOOLS + SAFE_TOOLS}
+
+async def generate_thread_title(first_message: str) -> str:
+    """Generate a short 3-5 word title for the chat thread."""
+    try:
+        llm = LLMFactory.get_llm()
+        prompt = f"Generate a very short, concise title (3-5 words) for a chat that starts with this message: '{first_message}'. The title should summarize the user's intent. Do not use quotes. Just the title."
+        response = await llm.ainvoke([HumanMessage(content=prompt)])
+        title = response.content.strip().replace('"', '')
+        
+        # Prepend date
+        date_str = datetime.now().strftime("%b %d")
+        return f"{date_str} - {title}"
+    except Exception as e:
+        print(f"Error generating title: {e}")
+        return f"{datetime.now().strftime('%b %d')} - New Chat"
 
 class ChatRequest(BaseModel):
     message: str
@@ -93,31 +112,18 @@ async def _get_proposed_action_with_details(snapshot):
                     
     return proposed_actions, status
 
-from sqlalchemy import text
-
 @router.get("/history")
 async def get_chat_history():
     try:
-        async with engine.connect() as conn:
-            # Check if table exists
-            result = await conn.execute(text(
-                "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'checkpoints')"
-            ))
-            exists = result.scalar()
-            
-            if not exists:
-                return {"threads": []}
-
-            # Get threads
-            # We could try to get the last write time to sort, but for now just list them
-            result = await conn.execute(text(
-                "SELECT thread_id FROM checkpoints GROUP BY thread_id"
-            ))
-            # Simple title generation
-            threads = [{"id": row.thread_id, "title": f"Chat {row.thread_id[:8]}..."} for row in result]
-            return {"threads": threads}
+        async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+        async with async_session() as session:
+            statement = select(Thread).order_by(Thread.updated_at.desc())
+            result = await session.exec(statement)
+            threads = result.all()
+            return {"threads": [{"id": t.id, "title": t.title} for t in threads]}
     except Exception as e:
         print(f"Error fetching history: {e}")
+        return {"threads": []}
         return {"threads": []}
 
 @router.get("/{thread_id}", response_model=ChatResponse)
@@ -147,6 +153,25 @@ async def get_chat_state(thread_id: str):
 @router.post("/message", response_model=ChatResponse)
 async def chat_message(request: ChatRequest):
     thread_id = request.thread_id or str(uuid.uuid4())
+    
+    # Handle Thread Metadata
+    try:
+        async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+        async with async_session() as session:
+            thread = await session.get(Thread, thread_id)
+            if not thread:
+                # New thread, generate title
+                title = await generate_thread_title(request.message)
+                thread = Thread(id=thread_id, title=title)
+                session.add(thread)
+            else:
+                # Update timestamp
+                thread.updated_at = datetime.utcnow()
+                session.add(thread)
+            await session.commit()
+    except Exception as e:
+        print(f"Error updating thread metadata: {e}")
+
     config = {"configurable": {"thread_id": thread_id}}
     
     # Get the graph

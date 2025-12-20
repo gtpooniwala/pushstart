@@ -94,6 +94,12 @@ function ToolCallDisplay({ toolCalls }: { toolCalls: any[] }) {
   );
 }
 
+const SUGGESTIONS = [
+  "What are my tasks for today?",
+  "Schedule a deep work session for tomorrow morning",
+  "Review my calendar for next week"
+];
+
 export default function ChatPanel({ threadId, setThreadId, setProposedActions, proposedActions, messages, setMessages }: ChatPanelProps) {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -128,22 +134,24 @@ export default function ChatPanel({ threadId, setThreadId, setProposedActions, p
     }
   }, [threadId, setProposedActions]);
 
-  const sendMessage = async () => {
-    if (!input.trim() || isLoading) return;
+  const sendMessage = async (messageOverride?: string | React.MouseEvent) => {
+    const messageToSend = typeof messageOverride === "string" ? messageOverride : input;
+    if (!messageToSend.trim() || isLoading) return;
 
-    const userMessage = input;
-    setInput("");
+    if (typeof messageOverride !== "string") {
+      setInput("");
+    }
     setIsLoading(true);
 
     // Optimistic update
-    setMessages((prev) => [...prev, { role: "user", content: userMessage }]);
+    setMessages((prev) => [...prev, { role: "user", content: messageToSend }]);
 
     try {
       const response = await fetch("http://localhost:8000/chat/message", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          message: userMessage,
+          message: messageToSend,
           thread_id: threadId,
         }),
       });
@@ -238,6 +246,19 @@ export default function ChatPanel({ threadId, setThreadId, setProposedActions, p
 
       {/* Input Area */}
       <div className="p-4 border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
+        {messages.length === 0 && (
+          <div className="flex gap-2 overflow-x-auto mb-3 pb-1 no-scrollbar">
+            {SUGGESTIONS.map((s, i) => (
+              <button
+                key={i}
+                onClick={() => sendMessage(s)}
+                className="whitespace-nowrap px-3 py-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full text-xs text-gray-600 dark:text-gray-300 transition-colors border border-gray-200 dark:border-gray-700 flex-shrink-0"
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+        )}
         <div className="relative">
           <textarea
             value={input}
