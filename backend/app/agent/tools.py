@@ -5,6 +5,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlalchemy.orm import sessionmaker
 from app.services.task_service import TaskService
 from app.services.calendar_service import CalendarService
+from app.services.gmail_service import GmailService
 from app.mcp_client.calendar_client import calendar_client
 
 async def get_service():
@@ -78,7 +79,19 @@ async def find_free_blocks(duration_minutes: int = 60, days: int = 3):
         service = CalendarService(session)
         return await service.find_free_blocks(duration_minutes, days)
 
-SAFE_TOOLS = [list_tasks, list_calendar_events, find_free_blocks]
-SENSITIVE_TOOLS = [create_task, update_task, delete_task, complete_task, create_calendar_event]
+@tool
+async def list_emails(max_results: int = 10, query: str = ""):
+    """List emails from Gmail. Query examples: 'is:unread', 'from:boss@example.com'."""
+    service = GmailService()
+    return await service.list_emails(max_results, query)
+
+@tool
+async def create_email_draft(to: str, subject: str, body: str):
+    """Create a draft email in Gmail."""
+    service = GmailService()
+    return await service.create_draft(to, subject, body)
+
+SAFE_TOOLS = [list_tasks, list_calendar_events, find_free_blocks, list_emails]
+SENSITIVE_TOOLS = [create_task, update_task, delete_task, complete_task, create_calendar_event, create_email_draft]
 ALL_TOOLS = SAFE_TOOLS + SENSITIVE_TOOLS
 

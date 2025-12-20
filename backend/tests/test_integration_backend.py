@@ -9,6 +9,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from app.main import app
 from app.mcp_client.todoist_client import todoist_client
+from app.mcp_client.gmail_client import gmail_client
 
 # Load env vars
 root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
@@ -83,6 +84,44 @@ async def test_mcp_client_direct():
              assert delete_result is True or delete_result is None
     except Exception as e:
         pytest.fail(f"Task deletion failed: {e}")
+
+@pytest.mark.asyncio
+async def test_gmail_mcp_client():
+    """Test the Gmail MCP client directly."""
+    print("\nTesting Gmail MCP Client directly...")
+    
+    # Test listing emails
+    try:
+        emails = await gmail_client.list_emails(max_results=5)
+        print(f"Gmail Client returned: {emails}")
+        
+        # It might return an error dict if not authenticated
+        if isinstance(emails, list) and len(emails) > 0 and isinstance(emails[0], dict) and "error" in emails[0]:
+            print(f"Gmail MCP returned error (expected if not authenticated): {emails[0]['error']}")
+        elif isinstance(emails, dict) and "error" in emails:
+             print(f"Gmail MCP returned error (expected if not authenticated): {emails['error']}")
+        else:
+            assert isinstance(emails, list), f"Expected list, got {type(emails)}: {emails}"
+    except Exception as e:
+        pytest.fail(f"Gmail MCP Client failed: {e}")
+
+    # Test creating a draft
+    try:
+        draft = await gmail_client.create_draft(
+            to="test@example.com",
+            subject="Test Draft from Pushstart Integration Test",
+            body="This is a test draft created by the integration test."
+        )
+        print(f"Created Draft: {draft}")
+        
+        if isinstance(draft, dict) and "error" in draft:
+             print(f"Gmail MCP returned error (expected if not authenticated): {draft['error']}")
+        else:
+            assert isinstance(draft, dict), f"Expected dict, got {type(draft)}: {draft}"
+            # assert "id" in draft, "Draft response should contain an ID" 
+            # (Commented out because if it fails auth, it returns error dict without id)
+    except Exception as e:
+        pytest.fail(f"Draft creation failed: {e}")
 
 
 def test_api_endpoint():

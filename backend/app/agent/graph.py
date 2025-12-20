@@ -30,6 +30,7 @@ Current Date: {current_date}
 You have access to the following tools:
 - Todoist: create, update, delete, complete, list tasks.
 - Calendar: list events, find free blocks, create events.
+- Gmail: list emails, create drafts.
 
 GUIDELINES:
 1. When asked to schedule "admin time" or "focus blocks":

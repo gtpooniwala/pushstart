@@ -19,6 +19,9 @@ cleanup() {
     if [ -n "$CALENDAR_MCP_PID" ]; then
         kill $CALENDAR_MCP_PID 2>/dev/null
     fi
+    if [ -n "$GMAIL_MCP_PID" ]; then
+        kill $GMAIL_MCP_PID 2>/dev/null
+    fi
     # Stop Docker containers
     echo "🐳 Stopping Docker containers..."
     if command -v docker-compose &> /dev/null; then
@@ -97,14 +100,21 @@ pip install -r calendar_server/requirements.txt > /dev/null 2>&1
 python3 -m uvicorn calendar_server.server:app --port 8002 &
 CALENDAR_MCP_PID=$!
 
+# 3c. Start Gmail MCP Server (Local)
+echo "🔌 Starting Gmail MCP Server (Local)..."
+# Install dependencies
+pip install -r gmail_server/requirements.txt > /dev/null 2>&1
+python3 -m uvicorn gmail_server.server:app --port 8003 &
+GMAIL_MCP_PID=$!
+
 # Wait for MCP Server to be ready
 echo "   Waiting for MCP servers to be ready..."
 for i in {1..30}; do
-    if nc -z localhost 8001 2>/dev/null && nc -z localhost 8002 2>/dev/null; then
+    if nc -z localhost 8001 2>/dev/null && nc -z localhost 8002 2>/dev/null && nc -z localhost 8003 2>/dev/null; then
         echo "   ✅ MCP Servers are ready!"
         break
     fi
-    echo "   ...waiting for ports 8001/8002..."
+    echo "   ...waiting for ports 8001/8002/8003..."
     sleep 1
 done
 

@@ -47,6 +47,21 @@ services:
       - PYTHONPATH=/app
     command: ["uvicorn", "calendar_server.server:app", "--host", "0.0.0.0", "--port", "8000"]
 
+  mcp-gmail:
+    build:
+      context: mcp
+      dockerfile: Dockerfile
+    container_name: pushstart-mcp-gmail
+    ports:
+      - "8003:8000"
+    env_file:
+      - .env
+    volumes:
+      - ./mcp:/app
+    environment:
+      - PYTHONPATH=/app
+    command: ["uvicorn", "gmail_server.server:app", "--host", "0.0.0.0", "--port", "8000"]
+
   backend:
     build:
       context: .
