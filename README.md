@@ -1,71 +1,94 @@
-# Pushstart
+# Pushstart 🚀
 
-Pushstart is a personal execution engine that turns vague intentions and tasks
-into **scheduled, guided sessions** in your calendar.
+**An agentic task manager that helps you actually execute tasks.**
 
-Instead of relying on motivation or willpower, Pushstart:
+Pushstart is not just another to-do list. It is a personal execution engine designed to overcome procrastination and decision fatigue. It turns vague intentions into scheduled, actionable sessions using AI agents and the Model Context Protocol (MCP).
 
-- Captures tasks quickly
-- Classifies and organises them
-- Schedules focused “admin” and “deep work” blocks
-- Guides you step-by-step during those blocks
-- Uses external integrations via MCP tools (calendar now, more later)
-- Keeps all external actions **human-in-the-loop (HITL)**
+## 🧠 Philosophy
 
-The primary user is a single individual (Gaurav) who:
-- Avoids ambiguous, low-stimulation tasks
-- Responds well to clear structure and guided steps
-- Wants the system to reduce friction, not create more work
+Most productivity tools fail because they are just lists. They don't help you **start**.
+Pushstart is built on three core principles:
 
-## Architecture (High Level)
+1.  **Reduce Friction:** The agent handles the "admin" work—scheduling, prioritizing, and drafting emails—so you can focus on doing.
+2.  **One Thing at a Time:** The system filters out noise and presents you with the single most important task to do *right now*.
+3.  **Action over Planning:** Instead of asking "when do you want to do this?", Pushstart finds a slot and asks "Shall I book this for 2 PM?".
 
-- **Frontend:** Next.js (TypeScript)  
-  - UI for viewing tasks, reviewing suggestions, and running guided sessions  
-  - Chat interface for natural language interaction
+## ✨ Key Features
 
-- **Backend:** FastAPI (Python)  
-  - **Core Logic:** Algorithms and LLM/Agent orchestration
-  - **Data:** Local PostgreSQL cache for tasks and sessions
-  - **API:** REST endpoints for frontend and agent triggers
+-   **🤖 Proactive Agent:** A LangGraph-based agent that manages your schedule and tasks. It doesn't just wait for commands; it makes decisions based on your priorities.
+-   **🔗 MCP Integrations:** Built on the [Model Context Protocol](https://modelcontextprotocol.io/), Pushstart connects directly to your tools:
+    -   **Todoist:** Two-way sync for task management.
+    -   **Google Calendar:** Smart scheduling and free-slot finding.
+    -   **Gmail:** Draft emails and summarize threads directly from the chat.
+-   **🎯 Focus Mode:** A dedicated UI for executing tasks step-by-step without distractions.
+-   **🔒 Privacy First:** Runs locally with your own API keys.
 
-- **Agent Layer:** Python LLM workflows (LangGraph)
-  - Uses MCP tools to interact with external systems
-  - Handles classification, step sequencing, and suggestions
-  - Always respects HITL for write actions
+## 🛠️ Tech Stack
 
-- **Integrations:** MCP (Model Context Protocol)
-  - All integrations live in the `mcp/` folder
-  - **Todoist:** Two-way sync with local cache (Write-Through)
-  - **Calendar:** Google Calendar integration for scheduling
+-   **Frontend:** Next.js 14, Tailwind CSS, Lucide Icons.
+-   **Backend:** FastAPI, LangGraph (AI Orchestration), SQLAlchemy (Async).
+-   **Integrations (MCP):** Python-based MCP servers for Todoist, Calendar, and Gmail.
+-   **Infrastructure:** Docker (PostgreSQL), Conda (Python Environment).
 
-## Current Stage
+## 🚀 Getting Started
 
-**Phase 2 – Agent Layer & Local Cache (Completed)**
+### Prerequisites
+-   Docker & Docker Compose
+-   Conda (Miniconda/Anaconda)
+-   Node.js & npm
+-   **API Keys:**
+    -   OpenAI API Key
+    -   Todoist API Token
+    -   Google Cloud Credentials (`credentials.json` for Calendar/Gmail)
 
-We have implemented a sophisticated agentic workflow with a robust local caching layer.
+### Installation
 
-**Key Features:**
-- **Natural Language Interface:** Chat with the agent to manage tasks.
-- **Local Cache:** Fast, offline-capable access to tasks via local Postgres DB.
-- **Write-Through Sync:** Changes are pushed to Todoist and immediately reflected locally.
-- **Human-in-the-Loop:** The agent proposes actions (create/update/delete), you approve them.
+1.  **Clone the repo:**
+    ```bash
+    git clone https://github.com/gtpooniwala/pushstart.git
+    cd pushstart
+    ```
 
-**Phase 3 – Calendar Integration (Completed)**
+2.  **Setup Environment:**
+    ```bash
+    # Create .env file
+    cp .env.example .env
+    # Add your API keys to .env
+    ```
 
-We have successfully integrated Google Calendar via MCP and implemented scheduling logic.
+3.  **Setup Google Credentials:**
+    -   Place your `credentials.json` in `mcp/calendar_server/` and `mcp/gmail_server/`.
 
-**Key Features:**
-- **Google Calendar MCP:** Full read/write access to calendar events via a dedicated MCP server.
-- **Scheduling Logic:** The agent can find free slots and propose time blocks for tasks.
-- **Unified MCP Architecture:** Both Todoist and Calendar are accessed strictly through MCP clients.
+4.  **Run the Setup Script:**
+    ```bash
+    ./setup.sh
+    ```
 
-**Next Up:** Phase 4 – Advanced Orchestration & Multi-Modal Inputs.
+### Running the App
 
-## Docs
+Start the entire stack (Frontend, Backend, Database, MCP Servers) with one command:
 
-- [Overview](docs/OVERVIEW.md)
-- [Phase 1 MVP Spec](docs/phase1-mvp.md)
-- [Agent Guidelines](docs/AGENT_GUIDELINES.md)
-- [Contributing](CONTRIBUTING.md)
+```bash
+./run.sh
+```
 
-More setup and run instructions will be added as the backend/frontend are scaffolded.
+-   **Frontend:** [http://localhost:3000](http://localhost:3000)
+-   **Backend Docs:** [http://localhost:8000/docs](http://localhost:8000/docs)
+
+## 📂 Project Structure
+
+```
+pushstart/
+├── backend/          # FastAPI application & LangGraph Agent
+├── frontend/         # Next.js application
+├── mcp/              # Model Context Protocol Servers
+│   ├── calendar_server/
+│   ├── gmail_server/
+│   └── todoist_server/
+├── docs/             # Documentation
+└── run.sh            # Main startup script
+```
+
+## 🤝 Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
